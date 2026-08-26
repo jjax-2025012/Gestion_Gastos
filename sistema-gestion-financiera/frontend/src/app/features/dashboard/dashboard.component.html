@@ -1,0 +1,359 @@
+<div class="dash" [class.sidebar-collapsed]="sidebarCollapsed">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="sidebar__logo">
+      <img src="assets/logo.png" alt="OSCORP Gestión de Gastos" class="sidebar__logo-img" />
+    </div>
+
+    <nav class="sidebar__menu">
+      <button
+        *ngFor="let item of menuItems"
+        class="sidebar__item"
+        [class.active]="activeRoute === item.route"
+        (click)="setActiveRoute(item.route)"
+        [title]="item.label"
+      >
+        <img class="sidebar__item-icon" [src]="'assets/icon-' + item.route + '.png'" [alt]="item.label" />
+        <span *ngIf="!sidebarCollapsed">{{ item.label }}</span>
+      </button>
+    </nav>
+
+    <button class="sidebar__collapse-btn" (click)="toggleSidebar()">
+      <svg class="icon" [class.flipped]="sidebarCollapsed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M15 6l-6 6 6 6" />
+      </svg>
+      <span *ngIf="!sidebarCollapsed">Cerrar Menú</span>
+    </button>
+  </aside>
+
+  <!-- ============ CONTENIDO PRINCIPAL ============ -->
+  <main class="main">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="header__welcome">
+        <h1>Bienvenido de vuelta, {{ currentUser?.username || currentUser?.firstName || 'Usuario' }}!</h1>
+        <p>Aquí tienes un resumen de tus finanzas</p>
+      </div>
+
+      <div class="header__search">
+        <input
+          type="text"
+          placeholder="Buscar..."
+          [(ngModel)]="searchTerm"
+          (ngModelChange)="onSearchChange()"
+        />
+        <img class="header__search-icon" src="assets/lupa.png" alt="" />
+      </div>
+
+      <div class="header__actions">
+        <div class="header__date">
+          <img class="header__date-icon" src="assets/calendario.png" alt="" />
+          <span>{{ currentDateLabel }}</span>
+        </div>
+
+        <button class="header__bell">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path [attr.d]="getIconPath('bell')" />
+          </svg>
+          <span *ngIf="notifications.length > 0" class="header__bell-badge">
+            {{ getNotificationBadge() }}
+          </span>
+        </button>
+
+        <div class="header__user" (click)="toggleUserMenu()">
+          <div class="header__avatar">
+            <img
+              [src]="currentUser?.gender === 'female' ? 'assets/user-avatar-mujer.png' : 'assets/user-avatar-hombre.png'"
+              [alt]="currentUser?.username || 'Usuario'"
+            />
+          </div>
+          <div class="header__user-text">
+            <span class="header__user-name">{{ currentUser?.username || currentUser?.firstName }}</span>
+            <span class="header__user-role">Usuario</span>
+          </div>
+
+          <div class="header__user-menu" *ngIf="userMenuOpen">
+            <button (click)="logout()">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path [attr.d]="getIconPath('log-out')" />
+              </svg>
+              Cerrar sesión
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Tarjetas de resumen -->
+    <section class="summary-grid">
+      <div class="summary-card" *ngFor="let card of summaryCards">
+        <div class="summary-card__top">
+          <ng-container [ngSwitch]="card.title">
+            <img
+              *ngSwitchCase="'Balance total'"
+              class="summary-card__image-icon"
+              src="assets/icon-balance.png"
+              alt=""
+            />
+            <img
+              *ngSwitchCase="'Ahorro'"
+              class="summary-card__image-icon"
+              src="assets/icon-ahorro-resumen.png"
+              alt=""
+            />
+            <img
+              *ngSwitchCase="'Ingresos'"
+              class="summary-card__image-icon"
+              src="assets/ingresos-resumen.png"
+              alt=""
+            />
+            <img
+              *ngSwitchCase="'Gastos'"
+              class="summary-card__image-icon"
+              src="assets/gastos-resumen.png"
+              alt=""
+            />
+            <div *ngSwitchDefault class="summary-card__icon" [ngClass]="card.colorClass">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path [attr.d]="getIconPath(card.icon)" />
+              </svg>
+            </div>
+          </ng-container>
+          <span class="summary-card__title">{{ card.title }}</span>
+        </div>
+
+        <div class="summary-card__amount">{{ formatCurrency(card.amount) }}</div>
+
+        <div class="summary-card__footer">
+          <span class="summary-card__change" [ngClass]="getChangeClass(card)">
+            <svg *ngIf="card.changePercent !== 0" class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path [attr.d]="getIconPath(getChangeIcon(card))" />
+            </svg>
+            {{ card.changePercent }}%
+          </span>
+          <span class="summary-card__vs">vs mes anterior</span>
+        </div>
+
+        <svg class="summary-card__sparkline" viewBox="0 0 100 30" preserveAspectRatio="none">
+          <polyline [attr.points]="card.sparklinePoints" fill="none" [ngClass]="card.colorClass" stroke-width="2" />
+        </svg>
+      </div>
+    </section>
+
+    <!-- Gráficas principales -->
+    <section class="charts-grid">
+
+      <!-- Línea: Gastos vs Ingresos -->
+      <div class="panel line-chart-panel">
+        <div class="panel__header">
+          <div>
+            <h2>Gastos vs Ingresos</h2>
+            <div class="line-chart-legend">
+              <span class="legend-dot ingresos"></span> Ingresos
+              <span class="legend-dot gastos"></span> Gastos
+            </div>
+          </div>
+          <div class="range-tabs">
+            <button
+              *ngFor="let mode of rangeOptions"
+              [class.active]="rangeMode === mode"
+              (click)="setRangeMode(mode)"
+            >
+              {{ mode }}
+            </button>
+          </div>
+        </div>
+
+        <svg
+          class="line-chart"
+          [attr.viewBox]="'0 0 ' + chartWidth + ' ' + chartHeight"
+          preserveAspectRatio="xMidYMid meet"
+        >
+          <defs>
+            <linearGradient id="ingresosGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#10b981" stop-opacity="0.25" />
+              <stop offset="100%" stop-color="#10b981" stop-opacity="0" />
+            </linearGradient>
+            <linearGradient id="gastosGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#2563eb" stop-opacity="0.2" />
+              <stop offset="100%" stop-color="#2563eb" stop-opacity="0" />
+            </linearGradient>
+          </defs>
+
+          <!-- líneas guía horizontales -->
+          <g class="grid-lines">
+            <line
+              *ngFor="let tick of yAxisTicks"
+              [attr.x1]="46"
+              [attr.x2]="chartWidth - 16"
+              [attr.y1]="tick.y"
+              [attr.y2]="tick.y"
+            />
+          </g>
+
+          <!-- etiquetas eje Y -->
+          <g class="axis-labels-y">
+            <text *ngFor="let tick of yAxisTicks" [attr.x]="40" [attr.y]="tick.y + 4">
+              {{ formatYAxisValue(tick.value) }}
+            </text>
+          </g>
+
+          <!-- áreas -->
+          <path [attr.d]="ingresosArea" fill="url(#ingresosGradient)" />
+          <path [attr.d]="gastosArea" fill="url(#gastosGradient)" />
+
+          <!-- líneas -->
+          <path [attr.d]="ingresosPath" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+          <path [attr.d]="gastosPath" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+
+          <!-- puntos -->
+          <circle [attr.cx]="ingresosLastPoint.x" [attr.cy]="ingresosLastPoint.y" r="4" fill="#10b981" />
+          <circle [attr.cx]="gastosLastPoint.x" [attr.cy]="gastosLastPoint.y" r="4" fill="#2563eb" />
+
+          <!-- etiquetas eje X -->
+          <g class="axis-labels-x">
+            <text *ngFor="let l of xAxisLabels" [attr.x]="l.x" [attr.y]="chartHeight - 6" text-anchor="middle">
+              {{ l.label }}
+            </text>
+          </g>
+        </svg>
+
+        <div class="line-chart-badges">
+          <span class="badge ingresos">{{ formatCurrency(chartData[chartData.length - 1].ingresos) }}</span>
+          <span class="badge gastos">{{ formatCurrency(chartData[chartData.length - 1].gastos) }}</span>
+        </div>
+      </div>
+
+      <!-- Dona: Categoría de Gastos -->
+      <div class="panel donut-panel">
+        <div class="panel__header">
+          <h2>Categoría de Gastos</h2>
+        </div>
+
+        <div class="donut-content">
+          <svg class="donut-chart" viewBox="0 0 200 200">
+            <g transform="rotate(-90 100 100)">
+              <circle
+                *ngFor="let slice of categories"
+                cx="100"
+                cy="100"
+                r="70"
+                fill="none"
+                [attr.stroke]="slice.color"
+                stroke-width="26"
+                [attr.stroke-dasharray]="slice.dashArray"
+                [attr.stroke-dashoffset]="slice.dashOffset"
+              />
+            </g>
+            <text x="100" y="96" text-anchor="middle" class="donut-total-label">Total</text>
+            <text x="100" y="116" text-anchor="middle" class="donut-total-amount">{{ formatCurrency(totalGastos) }}</text>
+          </svg>
+
+          <ul class="donut-legend">
+            <li *ngFor="let slice of categories">
+              <span class="category-icon" [style.background]="slice.color">
+                <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path [attr.d]="getIconPath(getCategoryIcon(slice.name))" />
+                </svg>
+              </span>
+              <span class="donut-legend__name">{{ slice.name }}</span>
+              <span class="donut-legend__amount">{{ formatCurrency(slice.amount) }}</span>
+              <span class="donut-legend__percent" [style.color]="slice.color" [style.background]="slice.color + '18'">{{ slice.percent }}%</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sección inferior: 3 columnas -->
+    <section class="bottom-grid">
+
+      <!-- Gastos recientes -->
+      <div class="panel">
+        <div class="panel__header">
+          <h2>Gastos Recientes</h2>
+          <button class="link-btn">Ver todos</button>
+        </div>
+
+        <table class="expenses-table">
+          <thead>
+            <tr>
+              <th>Descripción</th>
+              <th>Categoría</th>
+              <th>Fecha</th>
+              <th>Método de pago</th>
+              <th>Estado</th>
+              <th>Cantidad</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let e of visibleExpenses">
+              <td class="expense-desc">
+                <span class="expense-icon" [style.background]="e.iconBg">
+                  <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path [attr.d]="getIconPath(e.icon)" />
+                  </svg>
+                </span>
+                {{ e.description }}
+              </td>
+              <td>{{ e.category }}</td>
+              <td>{{ e.date }}</td>
+              <td>{{ e.method }}</td>
+              <td><span class="status-pill">{{ e.status }}</span></td>
+              <td class="expense-amount">{{ formatCurrency(e.amount) }}</td>
+            </tr>
+            <tr *ngIf="visibleExpenses.length === 0">
+              <td colspan="6" class="empty-state">No se encontraron gastos.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Presupuesto -->
+      <div class="panel">
+        <div class="panel__header">
+          <h2>Presupuesto</h2>
+          <button class="link-btn">Ver todos</button>
+        </div>
+
+        <ul class="budget-list">
+          <li *ngFor="let b of budgets">
+            <div class="budget-list__row">
+              <span class="budget-dot" [style.background]="b.color"></span>
+              <span class="budget-name">{{ b.category }}</span>
+              <span class="budget-values">{{ formatCurrency(b.spent) }} / {{ formatCurrency(b.total) }}</span>
+            </div>
+            <div class="budget-bar">
+              <div class="budget-bar__fill" [style.width.%]="b.percent" [style.background]="b.color"></div>
+            </div>
+            <span class="budget-percent">{{ b.percent }}%</span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Notificaciones -->
+      <div class="panel">
+        <div class="panel__header">
+          <h2>Notificaciones</h2>
+          <button class="link-btn">Ver todos</button>
+        </div>
+
+        <ul class="notif-list">
+          <li *ngFor="let n of notifications">
+            <span class="notif-icon" [ngClass]="n.type">
+              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path [attr.d]="getIconPath(n.icon)" />
+              </svg>
+            </span>
+            <div class="notif-text">
+              <p>{{ n.message }}</p>
+              <span>{{ n.time }}</span>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>

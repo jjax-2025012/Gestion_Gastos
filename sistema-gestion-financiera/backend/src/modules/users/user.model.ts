@@ -1,0 +1,30 @@
+export interface UserRecord {
+  id: string; // UUID
+  username: string;
+  email: string;
+  password: string; // hash de la contraseña
+  gender: 'male' | 'female' | 'other';
+  firstName?: string;
+  lastName?: string;
+  created_at: Date;
+}
+
+export interface PublicUser {
+  id: string;
+  username: string;
+  email: string;
+  gender: 'male' | 'female' | 'other';
+  firstName?: string;
+  lastName?: string;
+}
+
+export function toPublicUser(user: UserRecord): PublicUser {
+  return {
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    gender: user.gender,
+    firstName: user.firstName,
+    lastName: user.lastName,
+  };
+}
