@@ -1,0 +1,381 @@
+<div class="incomes" [class.sidebar-collapsed]="sidebarCollapsed">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="sidebar__logo">
+      <img src="assets/logo.png" alt="OSCORP Gestión de Gastos" class="sidebar__logo-img" />
+    </div>
+
+    <nav class="sidebar__menu">
+      <button
+        *ngFor="let item of menuItems"
+        class="sidebar__item"
+        [class.active]="activeRoute === item.route"
+        (click)="navigateTo(item)"
+        [title]="item.label"
+      >
+        <img class="sidebar__item-icon" [src]="'assets/icon-' + item.route + '.png'" [alt]="item.label" />
+        <span *ngIf="!sidebarCollapsed">{{ item.label }}</span>
+      </button>
+    </nav>
+
+    <button class="sidebar__collapse-btn" (click)="toggleSidebar()">
+      <svg class="icon" [class.flipped]="sidebarCollapsed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M15 6l-6 6 6 6" />
+      </svg>
+      <span *ngIf="!sidebarCollapsed">Cerrar Menú</span>
+    </button>
+  </aside>
+
+  <!-- ============ CONTENIDO PRINCIPAL ============ -->
+  <main class="main">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="header__welcome">
+        <h1>Ingresos</h1>
+        <p>Gestiona todas tus fuentes de ingreso</p>
+      </div>
+
+      <div class="header__search">
+        <input
+          type="text"
+          placeholder="Buscar ingreso..."
+          [(ngModel)]="searchTerm"
+          (ngModelChange)="applyFilters()"
+        />
+        <img class="header__search-icon" src="assets/lupa.png" alt="" />
+      </div>
+
+      <div class="header__actions">
+        <div class="header__date">
+          <img class="header__date-icon" src="assets/calendario.png" alt="" />
+          <span>{{ currentDateLabel }}</span>
+        </div>
+
+        <button class="header__bell">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path [attr.d]="getIconPath('bell')" />
+          </svg>
+        </button>
+
+        <div class="header__user" (click)="toggleUserMenu()">
+          <div class="header__avatar">
+            <img
+              [src]="currentUser?.gender === 'female' ? 'assets/user-avatar-mujer.png' : 'assets/user-avatar-hombre.png'"
+              [alt]="currentUser?.username || 'Usuario'"
+            />
+          </div>
+          <div class="header__user-text">
+            <span class="header__user-name">{{ currentUser?.username || currentUser?.firstName }}</span>
+            <span class="header__user-role">Usuario</span>
+          </div>
+
+          <div class="header__user-menu" *ngIf="userMenuOpen">
+            <button (click)="logout()">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path [attr.d]="getIconPath('log-out')" />
+              </svg>
+              Cerrar sesión
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Tarjetas de resumen -->
+    <section class="summary-grid">
+      <div class="summary-card" *ngFor="let metric of summaryMetrics">
+        <div class="summary-card__top">
+          <span class="summary-card__icon" [ngClass]="metric.colorClass">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path [attr.d]="getIconPath(metric.icon)" />
+            </svg>
+          </span>
+          <span class="summary-card__title">{{ metric.title }}</span>
+        </div>
+        <div class="summary-card__amount">{{ formatCurrency(metric.amount) }}</div>
+        <svg class="summary-card__sparkline" viewBox="0 0 100 30" preserveAspectRatio="none">
+          <polyline [attr.points]="metric.sparklinePoints" fill="none" [ngClass]="metric.colorClass" stroke-width="2" />
+        </svg>
+      </div>
+    </section>
+
+    <!-- Gráficas -->
+    <section class="charts-grid">
+
+      <!-- Dona: Ingresos por categoría -->
+      <div class="panel donut-panel">
+        <div class="panel__header">
+          <h2>Ingresos por categoría</h2>
+        </div>
+
+        <div class="donut-content">
+          <svg class="donut-chart" viewBox="0 0 200 200">
+            <g transform="rotate(-90 100 100)">
+              <circle
+                *ngFor="let slice of donutSlices"
+                cx="100"
+                cy="100"
+                r="70"
+                fill="none"
+                [attr.stroke]="slice.color"
+                stroke-width="26"
+                [attr.stroke-dasharray]="slice.dashArray"
+                [attr.stroke-dashoffset]="slice.dashOffset"
+              />
+            </g>
+            <text x="100" y="96" text-anchor="middle" class="donut-total-label">Total</text>
+            <text x="100" y="116" text-anchor="middle" class="donut-total-amount">{{ formatCurrency(donutTotal) }}</text>
+          </svg>
+
+          <ul class="donut-legend">
+            <li *ngFor="let slice of donutSlices">
+              <span class="category-icon" [style.background]="slice.color">
+                <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path [attr.d]="getCategoryIcon(slice.name)" />
+                </svg>
+              </span>
+              <span class="donut-legend__name">{{ slice.name }}</span>
+              <span class="donut-legend__amount">{{ formatCurrency(slice.amount) }}</span>
+              <span class="donut-legend__percent" [style.color]="slice.color" [style.background]="slice.color + '18'">{{ slice.percent }}%</span>
+            </li>
+            <li *ngIf="donutSlices.length === 0" class="donut-legend__empty">Sin ingresos todavía.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Barras: Ingresos por mes -->
+      <div class="panel bar-panel">
+        <div class="panel__header">
+          <h2>Ingresos por mes</h2>
+        </div>
+
+        <svg class="bar-chart" viewBox="0 0 260 180" preserveAspectRatio="xMidYMid meet">
+          <line *ngFor="let y of [16, 78, 140]" [attr.x1]="10" [attr.x2]="250" [attr.y1]="y" [attr.y2]="y" class="bar-chart__grid" />
+          <g *ngFor="let bar of monthBars; index as idx" class="bar-chart__group">
+            <rect
+              [attr.x]="10 + idx * 40"
+              [attr.y]="156 - bar.heightPct * 124"
+              width="26"
+              [attr.height]="bar.heightPct * 124"
+              rx="4"
+              class="bar-chart__rect"
+            />
+            <text [attr.x]="23 + idx * 40" y="170" text-anchor="middle" class="bar-chart__label">{{ bar.label }}</text>
+          </g>
+        </svg>
+
+        <div class="bar-chart__legend">
+          <span *ngFor="let bar of monthBars" [title]="formatCurrency(bar.amount)">
+            {{ bar.label }}: {{ formatCurrency(bar.amount) }}
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tabla de ingresos -->
+    <section class="panel table-panel">
+      <div class="panel__header">
+        <div>
+          <h2>Mis ingresos</h2>
+          <p class="table-panel__count">{{ visibleIncomes.length }} registro(s)</p>
+        </div>
+
+        <div class="table-toolbar">
+          <div class="select-wrap">
+            <select [(ngModel)]="filterCategoryId" (ngModelChange)="applyFilters()">
+              <option value="">Todas las categorías</option>
+              <option *ngFor="let c of categories" [value]="c.id">{{ c.name }}</option>
+            </select>
+          </div>
+
+          <button class="btn-primary" (click)="openNewModal()">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path [attr.d]="getIconPath('plus')" />
+            </svg>
+            Nuevo ingreso
+          </button>
+        </div>
+      </div>
+
+      <table class="incomes-table">
+        <thead>
+          <tr>
+            <th>Descripción</th>
+            <th>Categoría</th>
+            <th>Fecha</th>
+            <th>Tipo</th>
+            <th>Notas</th>
+            <th class="th-right">Monto</th>
+            <th class="th-center">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let inc of visibleIncomes">
+            <td class="inc-desc">
+              <span class="inc-icon" [style.background]="inc.category_color">
+                <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path [attr.d]="getCategoryIcon(inc.category_name)" />
+                </svg>
+              </span>
+              <span class="inc-desc__text">
+                {{ inc.description }}
+                <em *ngIf="inc.is_recurring">Recurrente</em>
+              </span>
+            </td>
+            <td>
+              <span class="category-chip">
+                <span class="category-chip__dot" [style.background]="inc.category_color"></span>
+                {{ inc.category_name }}
+              </span>
+            </td>
+            <td>{{ formatDate(inc.income_date) }}</td>
+            <td>
+              <span class="type-pill" [class.type-pill--recurring]="inc.is_recurring">
+                <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path [attr.d]="getIconPath('repeat')" />
+                </svg>
+                {{ inc.is_recurring ? 'Recurrente' : 'Único' }}
+              </span>
+            </td>
+            <td class="inc-notes">{{ inc.notes || '—' }}</td>
+            <td class="inc-amount">{{ formatCurrency(inc.amount) }}</td>
+            <td class="inc-actions">
+              <button class="icon-btn" (click)="openEditModal(inc)" title="Editar">
+                <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path [attr.d]="getIconPath('edit')" />
+                </svg>
+              </button>
+              <button class="icon-btn danger" (click)="openDeleteModal(inc)" title="Eliminar">
+                <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path [attr.d]="getIconPath('trash')" />
+                </svg>
+              </button>
+            </td>
+          </tr>
+
+          <tr *ngIf="loading">
+            <td colspan="7" class="empty-state">Cargando ingresos…</td>
+          </tr>
+          <tr *ngIf="!loading && loadingError">
+            <td colspan="7" class="empty-state">
+              {{ loadingError }}
+              <button class="link-btn" (click)="loadIncomes()">Reintentar</button>
+            </td>
+          </tr>
+          <tr *ngIf="!loading && !loadingError && visibleIncomes.length === 0">
+            <td colspan="7" class="empty-state">No hay ingresos que coincidan con tu búsqueda.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+</div>
+
+<!-- ============ MODAL CREAR / EDITAR ============ -->
+<div class="modal-overlay" *ngIf="showModal" (click)="closeModal()">
+  <div class="modal" (click)="$event.stopPropagation()">
+    <div class="modal__header">
+      <h3>{{ isEditing ? 'Editar ingreso' : 'Nuevo ingreso' }}</h3>
+      <button class="icon-btn" (click)="closeModal()" title="Cerrar">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path [attr.d]="getIconPath('close')" />
+        </svg>
+      </button>
+    </div>
+
+    <form (ngSubmit)="submit()" novalidate>
+      <div class="form-layout">
+        <label class="field">
+          <span>Categoría</span>
+          <select [(ngModel)]="form.category_id" name="category_id" required>
+            <option value="" disabled>Selecciona una categoría</option>
+            <option *ngFor="let c of categories" [value]="c.id">{{ c.name }}</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Monto (Q)</span>
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            [(ngModel)]="form.amount"
+            name="amount"
+            placeholder="0.00"
+          />
+        </label>
+
+        <label class="field field--full">
+          <span>Descripción</span>
+          <input
+            type="text"
+            [(ngModel)]="form.description"
+            name="description"
+            placeholder="Ej: Pago de nómina"
+            maxlength="255"
+          />
+        </label>
+
+        <label class="field">
+          <span>Fecha</span>
+          <input type="date" [(ngModel)]="form.income_date" name="income_date" />
+        </label>
+
+        <label class="field field--check">
+          <input type="checkbox" [(ngModel)]="form.is_recurring" name="is_recurring" />
+          <span>Ingreso recurrente</span>
+        </label>
+
+        <label class="field field--full">
+          <span>Notas (opcional)</span>
+          <textarea
+            [(ngModel)]="form.notes"
+            name="notes"
+            rows="2"
+            maxlength="1000"
+            placeholder="Detalles adicionales…"
+          ></textarea>
+        </label>
+      </div>
+
+      <p class="form-error" *ngIf="formError">{{ formError }}</p>
+
+      <div class="modal__footer">
+        <button type="button" class="btn-ghost" (click)="closeModal()">Cancelar</button>
+        <button type="submit" class="btn-primary" [disabled]="saving">
+          {{ saving ? 'Guardando…' : (isEditing ? 'Guardar cambios' : 'Agregar ingreso') }}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ MODAL ELIMINAR ============ -->
+<div class="modal-overlay" *ngIf="showDeleteModal" (click)="cancelDelete()">
+  <div class="modal modal--sm" (click)="$event.stopPropagation()">
+    <div class="modal__header">
+      <h3>Eliminar ingreso</h3>
+    </div>
+
+    <p class="delete-text">
+      ¿Estás seguro que deseas eliminar el ingreso
+      <strong>{{ deletingIncome?.description }}</strong> por
+      <strong>{{ deletingIncome ? formatCurrency(deletingIncome.amount) : '' }}</strong>?
+      Esta acción no se puede deshacer.
+    </p>
+
+    <div class="modal__footer">
+      <button type="button" class="btn-ghost" (click)="cancelDelete()">Cancelar</button>
+      <button type="button" class="btn-danger" [disabled]="deleting" (click)="confirmDelete()">
+        {{ deleting ? 'Eliminando…' : 'Eliminar' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TOAST ============ -->
+<div class="toast" *ngIf="toastMessage" [class.toast--error]="toastType === 'error'">
+  {{ toastMessage }}
+</div>
