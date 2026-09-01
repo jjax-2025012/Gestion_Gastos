@@ -1,0 +1,16 @@
+# Dependencias
+node_modules/
+
+# Compilación
+dist/
+out-tsc/
+
+# Variables de entorno (si se agregan en el futuro)
+.env
+
+# Sistema operativo / editor
+.DS_Store
+.vscode/
+
+# Angular
+.angular/cache
