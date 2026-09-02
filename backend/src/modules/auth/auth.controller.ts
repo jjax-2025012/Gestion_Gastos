@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import * as authService from './auth.service';
-import { ValidationError } from '../../utils/errors';
+import { DatabaseUnavailableError, ValidationError } from '../../utils/errors';
+import { findUserById } from '../users/user.repository';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -97,9 +98,25 @@ export async function googleLoginHandler(req: Request, res: Response, next: Next
   }
 }
 
-export function getMeHandler(req: Request, res: Response) {
-  const { sub, email, username, gender, picture, avatar_url, avatar, avatarUrl } = req.authUser;
-  res.status(200).json({
-    user: { id: sub, email, username, gender, picture, avatar_url, avatar, avatarUrl },
-  });
+export async function getMeHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { sub, email, username, gender, picture, avatar_url, avatar, avatarUrl } = req.authUser;
+    const userRecord = await findUserById(sub);
+    const currentAvatar = userRecord?.avatar_url ?? picture ?? avatar_url ?? avatar ?? avatarUrl;
+    res.status(200).json({
+      user: {
+        id: sub,
+        email,
+        username,
+        gender,
+        picture: currentAvatar,
+        avatar_url: currentAvatar,
+        avatar: currentAvatar,
+        avatarUrl: currentAvatar,
+      },
+    });
+  } catch (error) {
+    console.error('Error al consultar el usuario actual:', error);
+    next(new DatabaseUnavailableError());
+  }
 }
