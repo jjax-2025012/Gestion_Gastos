@@ -4,7 +4,8 @@ import {
   findUserByEmail,
   findUserByUsername,
   createUser,
-  updateUserAvatar,
+  upsertGoogleUser,
+  updateGoogleIdentity,
 } from '../users/user.repository';
 import { toPublicUser, PublicUser } from '../users/user.model';
 import { hashPassword, verifyPassword } from '../../utils/password';
@@ -37,8 +38,7 @@ export async function login(email: string, password: string): Promise<AuthResult
     throw new InvalidCredentialsError();
   }
 
-  // Verifica el campo de contraseña según cómo venga en la BD (password_hash o password)
-  const storedPassword = userRecord.password_hash || userRecord.password;
+  const storedPassword = userRecord.password;
   const passwordMatches = await verifyPassword(password, storedPassword);
   
   if (!passwordMatches) {
@@ -164,10 +164,12 @@ export async function loginWithGoogle(idToken: string): Promise<AuthResult> {
       const randomPassword = randomBytes(24).toString('hex');
       const passwordHash = await hashPassword(randomPassword);
 
-      userRecord = await createUser(username, email, passwordHash, 'other', payload.picture);
-    } else if (payload.picture && userRecord.avatar_url !== payload.picture) {
-      await updateUserAvatar(userRecord.id, payload.picture);
-      userRecord.avatar_url = payload.picture;
+      userRecord = await upsertGoogleUser(username, email, passwordHash, payload.picture, payload.sub);
+    } else {
+      await updateGoogleIdentity(userRecord.id, payload.sub, payload.picture);
+      if (payload.picture) {
+        userRecord.avatar_url = payload.picture;
+      }
     }
   } catch (error) {
     if (error instanceof AppError) {
@@ -178,10 +180,11 @@ export async function loginWithGoogle(idToken: string): Promise<AuthResult> {
   }
 
   const publicUser = toPublicUser(userRecord);
-  publicUser.picture = payload.picture;
-  publicUser.avatar_url = payload.picture;
-  publicUser.avatar = payload.picture;
-  publicUser.avatarUrl = payload.picture;
+  const finalAvatar = payload.picture || userRecord.avatar_url || undefined;
+  publicUser.picture = finalAvatar;
+  publicUser.avatar_url = finalAvatar;
+  publicUser.avatar = finalAvatar;
+  publicUser.avatarUrl = finalAvatar;
   const token = signAuthToken(publicUser);
   return { token, user: publicUser };
 }
