@@ -603,6 +603,8 @@
    ========================================================================== */
 .table-panel {
   padding: 20px 22px;
+  min-width: 0;
+  overflow-x: auto;
 }
 
 .table-panel__count {
@@ -1132,7 +1134,7 @@
 
 .income-lower-grid {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(220px, .8fr) minmax(220px, .8fr);
+  grid-template-columns: minmax(0, 2fr) minmax(220px, .8fr);
   gap: 18px;
   align-items: start;
 }
@@ -1179,48 +1181,6 @@
   color: var(--db-text-muted);
   font-size: 11px;
   margin-top: 8px;
-}
-
-.notifications-list {
-  display: grid;
-  gap: 14px;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.notifications-list li {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-}
-
-.notification-icon {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
-  color: var(--db-blue);
-  background: #eff6ff;
-  border-radius: 8px;
-}
-
-.notifications-list strong,
-.notifications-list small {
-  display: block;
-}
-
-.notifications-list strong {
-  color: var(--db-text);
-  font-size: 11px;
-  line-height: 1.35;
-}
-
-.notifications-list small {
-  color: var(--db-text-soft);
-  font-size: 10px;
-  margin-top: 3px;
 }
 
 .status-pill {
