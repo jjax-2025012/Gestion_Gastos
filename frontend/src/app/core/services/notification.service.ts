@@ -12,6 +12,19 @@ export interface NotificationItem {
   created_at: string;
 }
 
+interface NotificationsResponse {
+  data: NotificationItem[];
+}
+
+interface MarkAllAsReadResponse {
+  success: boolean;
+  updated: number;
+}
+
+interface DeleteNotificationResponse {
+  success: boolean;
+}
+
 @Injectable({ providedIn: 'root' })
 export class NotificationService {
   private readonly http = inject(HttpClient);
@@ -21,20 +34,20 @@ export class NotificationService {
   readonly unreadCount = signal(0);
 
   getNotifications(): Observable<NotificationItem[]> {
-    return this.http.get<{ data: NotificationItem[] }>(this.url).pipe(
+    return this.http.get<NotificationsResponse>(this.url).pipe(
       map((response) => response.data),
-      tap((items) => this.unreadCount.set(items.filter((item) => !item.is_read).length))
+      tap((items) => this.unreadCount.set(items.filter((item) => item.is_read === false).length))
     );
   }
 
-  markAllAsRead(): Observable<{ success: boolean; updated: number }> {
-    return this.http.patch<{ success: boolean; updated: number }>(`${this.url}/read-all`, {}).pipe(
+  markAllAsRead(): Observable<MarkAllAsReadResponse> {
+    return this.http.patch<MarkAllAsReadResponse>(`${this.url}/read-all`, {}).pipe(
       tap(() => this.unreadCount.set(0))
     );
   }
 
-  deleteNotification(id: string): Observable<{ success: boolean }> {
-    return this.http.delete<{ success: boolean }>(`${this.url}/${id}`);
+  deleteNotification(id: string): Observable<DeleteNotificationResponse> {
+    return this.http.delete<DeleteNotificationResponse>(`${this.url}/${id}`);
   }
 
   notifyDataChanged(): void {
