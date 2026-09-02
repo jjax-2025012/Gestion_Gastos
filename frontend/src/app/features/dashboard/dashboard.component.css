@@ -937,3 +937,18 @@
     overflow-x: auto;
   }
 }
+
+.donut-empty-state {
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: #6b7280;
+  font-size: 13px;
+  text-align: center;
+}
+
+.user-avatar-img {
+  border-radius: 50%;
+  object-fit: cover;
+}

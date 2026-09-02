@@ -62,6 +62,16 @@ export interface IncomesResponse {
   data: Income[];
 }
 
+export interface IncomeMutationResponse {
+  success: boolean;
+  data: Income;
+}
+
+export interface DeleteIncomeResponse {
+  success: boolean;
+  message: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -91,7 +101,7 @@ export class FinanceService {
    */
   createIncome(dto: CreateIncomeDTO): Observable<Income> {
     return this.http
-      .post<{ data: Income }>(this.INCOMES_URL, dto)
+      .post<IncomeMutationResponse>(this.INCOMES_URL, dto)
       .pipe(map((res) => res.data));
   }
 
@@ -100,15 +110,15 @@ export class FinanceService {
    */
   updateIncome(id: string, dto: UpdateIncomeDTO): Observable<Income> {
     return this.http
-      .put<{ data: Income }>(`${this.INCOMES_URL}/${id}`, dto)
+      .put<IncomeMutationResponse>(`${this.INCOMES_URL}/${id}`, dto)
       .pipe(map((res) => res.data));
   }
 
   /**
    * Elimina un ingreso por su ID.
    */
-  deleteIncome(id: string): Observable<{ message: string }> {
-    return this.http.delete<{ message: string }>(`${this.INCOMES_URL}/${id}`);
+  deleteIncome(id: string): Observable<DeleteIncomeResponse> {
+    return this.http.delete<DeleteIncomeResponse>(`${this.INCOMES_URL}/${id}`);
   }
 
   /**

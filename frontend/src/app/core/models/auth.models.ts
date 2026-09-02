@@ -6,6 +6,10 @@ export interface User {
   lastName?: string;
   gender?: 'male' | 'female' | 'other';
   role?: string;
+  picture?: string;
+  avatar_url?: string;
+  avatar?: string;
+  avatarUrl?: string;
 }
 
 export interface LoginResponse {

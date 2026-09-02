@@ -10,7 +10,6 @@ import { environment } from '../../../environments/environment';
 })
 export class AuthService {
   private readonly API_URL = `${environment.apiUrl}/auth`;
-  private readonly STORAGE_KEY_ISSUED_AT = 'token_issued_at';
 
   private http = inject(HttpClient);
   private router = inject(Router);
@@ -37,6 +36,16 @@ export class AuthService {
     );
   }
 
+  /**
+   * Intercambia el ID Token emitido por Google por el JWT del sistema.
+   * El backend valida la firma y crea la cuenta automáticamente si no existía.
+   */
+  googleLogin(idToken: string): Observable<LoginResponse> {
+    return this.http.post<LoginResponse>(`${this.API_URL}/google`, { idToken }).pipe(
+      tap(res => this.setSession(res))
+    );
+  }
+
   register(data: RegisterRequest): Observable<LoginResponse> {
     return this.http.post<LoginResponse>(`${this.API_URL}/register`, data).pipe(
       tap(res => this.setSession(res))
@@ -49,7 +58,6 @@ export class AuthService {
     }
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    localStorage.removeItem(this.STORAGE_KEY_ISSUED_AT);
     this.currentUser.set(null);
   }
 
@@ -78,64 +86,17 @@ export class AuthService {
   }
 
   isSessionValid(): boolean {
-    const issuedAt = this.getIssuedAtFromStorage();
-    if (issuedAt === null) return false;
-    return (Date.now() - issuedAt) < this.getTokenTimeoutMs();
-  }
-
-  private getTokenTimeoutMs(): number {
-    const envDuration = (environment as any).tokenTimeoutMs;
-    const parsed = this.parseDurationToMs(envDuration);
-    return parsed === null ? 900_000 : parsed;
-  }
-
-  private parseDurationToMs(value: unknown): number | null {
-    if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
-      return value;
-    }
-
-    if (typeof value !== 'string') return null;
-
-    const match = value
-      .trim()
-      .toLowerCase()
-      .match(/^(\d+(?:\.\d+)?)\s*(ms|s|secs?|seconds?|m|mins?|minutes?|h|hrs?|hours?|d|days?)?$/);
-
-    if (!match) return null;
-
-    const amount = parseFloat(match[1]);
-    const unit = match[2] || 'ms';
-
-    const multipliers: Record<string, number> = {
-      ms: 1,
-      s: 1_000,
-      sec: 1_000,
-      secs: 1_000,
-      second: 1_000,
-      seconds: 1_000,
-      m: 60_000,
-      min: 60_000,
-      mins: 60_000,
-      minute: 60_000,
-      minutes: 60_000,
-      h: 3_600_000,
-      hr: 3_600_000,
-      hrs: 3_600_000,
-      hour: 3_600_000,
-      hours: 3_600_000,
-      d: 86_400_000,
-      day: 86_400_000,
-      days: 86_400_000,
-    };
-
-    return amount * multipliers[unit];
+    const expiration = this.getTokenExpirationMs(this.getToken());
+    return expiration !== null && expiration > Date.now();
   }
 
   private setSession(authResult: LoginResponse): void {
+    const tokenPayload = this.decodeTokenPayload(authResult.token);
+    const avatar = authResult.user.picture || authResult.user.avatar_url || authResult.user.avatar || authResult.user.avatarUrl || tokenPayload['picture'] || tokenPayload['avatar_url'];
+    const user = { ...authResult.user, avatar, picture: authResult.user.picture || avatar, avatar_url: authResult.user.avatar_url || avatar, avatarUrl: authResult.user.avatarUrl || avatar };
     localStorage.setItem('token', authResult.token);
-    localStorage.setItem('user', JSON.stringify(authResult.user));
-    localStorage.setItem(this.STORAGE_KEY_ISSUED_AT, Date.now().toString());
-    this.currentUser.set(authResult.user);
+    localStorage.setItem('user', JSON.stringify(user));
+    this.currentUser.set(user);
     this.scheduleExpirationTimer();
   }
 
@@ -144,23 +105,9 @@ export class AuthService {
     return userStr ? JSON.parse(userStr) : null;
   }
 
-  private getIssuedAtFromStorage(): number | null {
-    const raw = localStorage.getItem(this.STORAGE_KEY_ISSUED_AT);
-    if (!raw) return null;
-    const parsed = parseInt(raw, 10);
-    return isNaN(parsed) ? null : parsed;
-  }
-
   private initSessionWatch(): void {
     const token = this.getToken();
     if (!token) return;
-
-    const issuedAt = this.getIssuedAtFromStorage();
-    if (issuedAt === null) {
-      this.handleSessionExpiration();
-      return;
-    }
-
     this.scheduleExpirationTimer();
   }
 
@@ -168,8 +115,8 @@ export class AuthService {
     const token = this.getToken();
     if (!token) return;
 
-    const issuedAt = this.getIssuedAtFromStorage();
-    if (issuedAt === null || (Date.now() - issuedAt) >= this.getTokenTimeoutMs()) {
+    const expiration = this.getTokenExpirationMs(token);
+    if (expiration === null || expiration <= Date.now()) {
       this.handleSessionExpiration();
     }
   }
@@ -179,13 +126,13 @@ export class AuthService {
       this.timerSubscription.unsubscribe();
     }
 
-    const issuedAt = this.getIssuedAtFromStorage();
-    if (issuedAt === null) {
+    const expiration = this.getTokenExpirationMs(this.getToken());
+    if (expiration === null) {
       this.handleSessionExpiration();
       return;
     }
 
-    const remainingMs = this.getTokenTimeoutMs() - (Date.now() - issuedAt);
+    const remainingMs = expiration - Date.now();
 
     if (remainingMs <= 0) {
       this.handleSessionExpiration();
@@ -197,5 +144,24 @@ export class AuthService {
         this.handleSessionExpiration();
       });
     });
+  }
+
+  private getTokenExpirationMs(token: string | null): number | null {
+    if (!token) return null;
+    try {
+      const payload = this.decodeTokenPayload(token);
+      return typeof payload['exp'] === 'number' ? payload['exp'] * 1000 : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private decodeTokenPayload(token: string | null): Record<string, any> {
+    if (!token) return {};
+    try {
+      return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    } catch {
+      return {};
+    }
   }
 }

@@ -44,13 +44,30 @@
         </div>
       </div>
 
-      <button type="submit" [disabled]="isLoading" class="btn-submit">
+      <button type="submit" [disabled]="isLoading || isGoogleLoading" class="btn-submit">
         <span *ngIf="!isLoading">Iniciar Sesión</span>
         <span *ngIf="isLoading" class="spinner-text">
           <span class="spinner"></span> Ingresando...
         </span>
       </button>
     </form>
+
+    <div class="google-divider">
+      <span>o continúa con</span>
+    </div>
+
+    <div class="google-button" style="width: 100%; max-width: 100%;">
+      <button
+        *ngIf="!environment.googleClientId"
+        type="button"
+        class="btn-google"
+        (click)="onGoogleNotConfigured()"
+      >
+        <span class="google-icon" aria-hidden="true">G</span>
+        Ingresa con Google
+      </button>
+      <div #googleButton></div>
+    </div>
 
 <div class="auth-footer">
   <span>¿No tienes una cuenta? </span>

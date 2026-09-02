@@ -62,7 +62,9 @@
         <div class="header__user" (click)="toggleUserMenu()">
           <div class="header__avatar">
             <img
-              [src]="currentUser?.gender === 'female' ? 'assets/user-avatar-mujer.png' : 'assets/user-avatar-hombre.png'"
+              [src]="currentUser?.avatar || currentUser?.avatarUrl || currentUser?.picture || currentUser?.avatar_url || defaultAvatar"
+              (error)="onAvatarError($event)"
+              class="user-avatar-img"
               [alt]="currentUser?.username || 'Usuario'"
             />
           </div>
@@ -85,29 +87,45 @@
 
     <!-- Tarjetas de resumen -->
     <section class="summary-grid">
-      <div class="summary-card" *ngFor="let metric of summaryMetrics">
+      <div class="summary-card" *ngFor="let metric of summaryCards">
         <div class="summary-card__top">
-          <span class="summary-card__icon" [ngClass]="metric.colorClass">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path [attr.d]="getIconPath(metric.icon)" />
-            </svg>
+          <span class="summary-card__icon" [ngClass]="metric.colorLine">
+            <img [src]="metric.iconSrc" [alt]="metric.title" />
           </span>
           <span class="summary-card__title">{{ metric.title }}</span>
         </div>
         <div class="summary-card__amount">{{ formatCurrency(metric.amount) }}</div>
-        <svg class="summary-card__sparkline" viewBox="0 0 100 30" preserveAspectRatio="none">
-          <polyline [attr.points]="metric.sparklinePoints" fill="none" [ngClass]="metric.colorClass" stroke-width="2" />
-        </svg>
+        <div class="summary-card__comparison">{{ metric.changePercent >= 0 ? '+' : '' }}{{ metric.changePercent | number:'1.1-1' }}% vs mes anterior</div>
+        <div class="summary-card__divider" [ngClass]="metric.colorLine"></div>
       </div>
     </section>
 
     <!-- Gráficas -->
     <section class="charts-grid">
 
+      <!-- Evolución: Ingresos por período -->
+      <div class="panel line-panel">
+        <div class="panel__header">
+          <h2>Evolución de Ingresos</h2>
+          <div class="range-selector">
+            <button *ngFor="let option of rangeOptions" [class.active]="rangeMode === option" (click)="setRangeMode(option)">{{ option }}</button>
+          </div>
+        </div>
+        <svg class="line-chart" [attr.viewBox]="'0 0 ' + chartWidth + ' ' + chartHeight" preserveAspectRatio="none">
+          <line *ngFor="let tick of yAxisTicks" [attr.x1]="padLeft" [attr.x2]="chartWidth - padRight" [attr.y1]="tick.y" [attr.y2]="tick.y" class="line-chart__grid" />
+          <path [attr.d]="ingresosPath" class="line-chart__path line-chart__path--income" />
+          <circle *ngFor="let point of incomePointPositions" [attr.cx]="point.x" [attr.cy]="point.y" r="4" class="line-chart__point line-chart__point--income">
+            <title>{{ point.label }}: {{ formatCurrency(point.value) }}</title>
+          </circle>
+          <text *ngFor="let label of xAxisLabels" [attr.x]="label.x" [attr.y]="chartHeight - 5" text-anchor="middle" class="line-chart__label">{{ label.label }}</text>
+        </svg>
+        <div class="chart-legend"><span><i class="legend-dot legend-dot--income"></i>Ingresos</span></div>
+      </div>
+
       <!-- Dona: Ingresos por categoría -->
       <div class="panel donut-panel">
         <div class="panel__header">
-          <h2>Ingresos por categoría</h2>
+          <h2>Desglose de Ingresos por Fuente</h2>
         </div>
 
         <div class="donut-content">
@@ -145,42 +163,17 @@
         </div>
       </div>
 
-      <!-- Barras: Ingresos por mes -->
-      <div class="panel bar-panel">
-        <div class="panel__header">
-          <h2>Ingresos por mes</h2>
-        </div>
-
-        <svg class="bar-chart" viewBox="0 0 260 180" preserveAspectRatio="xMidYMid meet">
-          <line *ngFor="let y of [16, 78, 140]" [attr.x1]="10" [attr.x2]="250" [attr.y1]="y" [attr.y2]="y" class="bar-chart__grid" />
-          <g *ngFor="let bar of monthBars; index as idx" class="bar-chart__group">
-            <rect
-              [attr.x]="10 + idx * 40"
-              [attr.y]="156 - bar.heightPct * 124"
-              width="26"
-              [attr.height]="bar.heightPct * 124"
-              rx="4"
-              class="bar-chart__rect"
-            />
-            <text [attr.x]="23 + idx * 40" y="170" text-anchor="middle" class="bar-chart__label">{{ bar.label }}</text>
-          </g>
-        </svg>
-
-        <div class="bar-chart__legend">
-          <span *ngFor="let bar of monthBars" [title]="formatCurrency(bar.amount)">
-            {{ bar.label }}: {{ formatCurrency(bar.amount) }}
-          </span>
-        </div>
-      </div>
     </section>
 
     <!-- Tabla de ingresos -->
-    <section class="panel table-panel">
+    <section class="income-lower-grid">
+      <div class="panel table-panel">
       <div class="panel__header">
         <div>
-          <h2>Mis ingresos</h2>
+          <h2>Ingresos Recientes</h2>
           <p class="table-panel__count">{{ visibleIncomes.length }} registro(s)</p>
         </div>
+        <button class="link-btn" type="button">Ver todos</button>
 
         <div class="table-toolbar">
           <div class="select-wrap">
@@ -190,11 +183,11 @@
             </select>
           </div>
 
-          <button class="btn-primary" (click)="openNewModal()">
+          <button class="btn-primary table-new-income" (click)="openNewModal()">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path [attr.d]="getIconPath('plus')" />
             </svg>
-            Nuevo ingreso
+            + Nuevo ingreso
           </button>
         </div>
       </div>
@@ -205,8 +198,8 @@
             <th>Descripción</th>
             <th>Categoría</th>
             <th>Fecha</th>
-            <th>Tipo</th>
-            <th>Notas</th>
+            <th>Método de pago</th>
+            <th>Estado</th>
             <th class="th-right">Monto</th>
             <th class="th-center">Acciones</th>
           </tr>
@@ -236,10 +229,10 @@
                 <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path [attr.d]="getIconPath('repeat')" />
                 </svg>
-                {{ inc.is_recurring ? 'Recurrente' : 'Único' }}
+                {{ inc.is_recurring ? 'Automático' : 'Manual' }}
               </span>
             </td>
-            <td class="inc-notes">{{ inc.notes || '—' }}</td>
+            <td><span class="status-pill">Completado</span></td>
             <td class="inc-amount">{{ formatCurrency(inc.amount) }}</td>
             <td class="inc-actions">
               <button class="icon-btn" (click)="openEditModal(inc)" title="Editar">
@@ -269,6 +262,25 @@
           </tr>
         </tbody>
       </table>
+      </div>
+
+      <div class="panel budget-panel">
+        <div class="panel__header"><h2>Presupuesto</h2><button class="link-btn" type="button">Ver todos</button></div>
+        <p class="panel-kicker">Ingresos registrados</p>
+        <strong class="budget-amount">{{ formatCurrency(budgetTotal) }}</strong>
+        <div class="budget-track"><span [style.width.%]="budgetPercent"></span></div>
+        <div class="budget-meta"><span>{{ budgetPercent }}% del objetivo</span><span>{{ formatCurrency(budgetTarget) }}</span></div>
+      </div>
+
+      <div class="panel notifications-panel">
+        <div class="panel__header"><h2>Notificaciones</h2><button class="link-btn" type="button">Ver todos</button></div>
+        <ul class="notifications-list">
+          <li *ngFor="let notification of notifications">
+            <span class="notification-icon"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path [attr.d]="getIconPath(notification.icon)" /></svg></span>
+            <span><strong>{{ notification.message }}</strong><small>{{ notification.time }}</small></span>
+          </li>
+        </ul>
+      </div>
     </section>
   </main>
 </div>

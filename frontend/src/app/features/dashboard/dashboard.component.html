@@ -65,7 +65,9 @@
         <div class="header__user" (click)="toggleUserMenu()">
           <div class="header__avatar">
             <img
-              [src]="currentUser?.gender === 'female' ? 'assets/user-avatar-mujer.png' : 'assets/user-avatar-hombre.png'"
+              [src]="currentUser?.avatar || currentUser?.avatarUrl || currentUser?.picture || currentUser?.avatar_url || defaultAvatar"
+              (error)="onAvatarError($event)"
+              class="user-avatar-img"
               [alt]="currentUser?.username || 'Usuario'"
             />
           </div>
@@ -232,7 +234,7 @@
           <h2>Categoría de Gastos</h2>
         </div>
 
-        <div class="donut-content">
+        <div class="donut-content" *ngIf="totalGastos > 0; else emptyExpensesDonut">
           <svg class="donut-chart" viewBox="0 0 200 200">
             <g transform="rotate(-90 100 100)">
               <circle
@@ -264,6 +266,9 @@
             </li>
           </ul>
         </div>
+        <ng-template #emptyExpensesDonut>
+          <div class="donut-empty-state">Sin gastos registrados todavía</div>
+        </ng-template>
       </div>
     </section>
 
@@ -330,6 +335,7 @@
             </div>
             <span class="budget-percent">{{ b.percent }}%</span>
           </li>
+          <li *ngIf="budgets.length === 0" class="empty-state">Presupuesto: Q0.00 / Q0.00 (0%)</li>
         </ul>
       </div>
 
@@ -352,6 +358,7 @@
               <span>{{ n.time }}</span>
             </div>
           </li>
+          <li *ngIf="notifications.length === 0" class="empty-state">No hay notificaciones recientes</li>
         </ul>
       </div>
     </section>

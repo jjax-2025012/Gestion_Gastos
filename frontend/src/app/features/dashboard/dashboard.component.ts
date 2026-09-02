@@ -3,6 +3,8 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
+import { FinanceService, Income, Expense } from '../../core/services/finance.service';
+import { NotificationService } from '../../core/services/notification.service';
 
 /* ---------- Modelos ---------- */
 
@@ -100,6 +102,8 @@ const DATASETS: Record<RangeMode, ChartPoint[]> = {
 })
 export class DashboardComponent implements OnInit {
   private readonly authService = inject(AuthService);
+  private readonly financeService = inject(FinanceService);
+  private readonly notificationService = inject(NotificationService);
 
   get currentUser() {
     return this.authService.currentUser();
@@ -112,6 +116,7 @@ export class DashboardComponent implements OnInit {
   isMobile = window.innerWidth < 900;
   userMenuOpen = false;
   searchTerm = '';
+  readonly defaultAvatar = 'assets/user-avatar-hombre.png';
 
   get currentDateLabel(): string {
     const currentDate = new Date();
@@ -182,15 +187,7 @@ export class DashboardComponent implements OnInit {
   ];
 
   /* Categoría de gastos (dona) */
-  private rawCategories = [
-    { name: 'Alimentación', amount: 0, color: '#2563eb' },
-    { name: 'Transporte', amount: 0, color: '#10b981' },
-    { name: 'Entretenimiento', amount: 0, color: '#8b5cf6' },
-    { name: 'Salud', amount: 0, color: '#ec4899' },
-    { name: 'Educación', amount: 0, color: '#f59e0b' },
-    { name: 'Servicios', amount: 0, color: '#06b6d4' },
-    { name: 'Otros', amount: 0, color: '#9ca3af' },
-  ];
+  private rawCategories: { name: string; amount: number; color: string }[] = [];
   categories: CategorySlice[] = [];
   totalGastos = 0;
   private readonly donutRadius = 70;
@@ -204,6 +201,8 @@ export class DashboardComponent implements OnInit {
   /* Notificaciones */
   notifications: NotificationItem[] = [];
   visibleExpenses: RecentExpense[] = this.allExpenses;
+  private incomes: Income[] = [];
+  private expenses: Expense[] = [];
 
   menuItems = [
     { label: 'Dashboard', icon: 'home', route: 'dashboard' },
@@ -218,12 +217,123 @@ export class DashboardComponent implements OnInit {
   activeRoute = 'dashboard';
 
   ngOnInit(): void {
+    this.loadDashboardData();
+    this.loadNotifications();
+    this.notificationService.refresh$.subscribe(() => {
+      this.loadDashboardData();
+      this.loadNotifications();
+    });
+  }
+
+  private loadNotifications(): void {
+    this.notificationService.getNotifications().subscribe({
+      next: (items) => {
+        this.notifications = items.map((item) => ({
+          message: item.message,
+          time: new Date(item.created_at).toLocaleString('es-GT'),
+          type: item.type,
+          icon: item.icon,
+        }));
+      },
+      error: () => { this.notifications = []; },
+    });
+  }
+
+  private loadDashboardData(): void {
+    this.financeService.getIncomes().subscribe({
+      next: (response) => {
+        this.incomes = response.data.map((income) => ({ ...income, amount: Number(income.amount) || 0 }));
+        this.refreshDashboard();
+      },
+    });
+    this.financeService.getExpenses().subscribe({
+      next: (response) => {
+        this.expenses = response.data.map((expense) => ({ ...expense, amount: Number(expense.amount) || 0 }));
+        this.allExpenses = this.expenses.slice(0, 6).map((expense) => ({
+          description: expense.description,
+          category: expense.category_name,
+          date: expense.expense_date,
+          method: expense.is_recurring ? 'Automático' : 'Manual',
+          status: 'Completado',
+          amount: expense.amount,
+          icon: 'receipt',
+          iconBg: expense.category_color || '#dbeafe',
+        }));
+        this.visibleExpenses = this.allExpenses;
+        this.refreshDashboard();
+      },
+    });
+  }
+
+  private refreshDashboard(): void {
+    const totalIncome = this.incomes.reduce((sum, income) => sum + income.amount, 0);
+    const totalExpense = this.expenses.reduce((sum, expense) => sum + expense.amount, 0);
+    this.summaryCards[0].amount = totalIncome - totalExpense;
+    this.summaryCards[1].amount = totalIncome;
+    this.summaryCards[2].amount = totalExpense;
+    this.summaryCards[3].amount = 0;
+    this.budgets = [];
+    this.rawCategories = [];
+    const categoryTotals = new Map<string, { amount: number; color: string }>();
+    this.expenses.forEach((expense) => {
+      const name = expense.category_name || 'Sin categoría';
+      const current = categoryTotals.get(name) ?? { amount: 0, color: expense.category_color || '#9ca3af' };
+      categoryTotals.set(name, { amount: current.amount + expense.amount, color: current.color });
+    });
+    this.rawCategories = [...categoryTotals.entries()].map(([name, value]) => ({ name, ...value }));
     this.buildCategoryDonut();
+    this.chartData = this.buildRealChartData();
     this.buildLineChart();
+  }
+
+  private buildRealChartData(): ChartPoint[] {
+    const now = new Date();
+    if (this.rangeMode === 'Año') {
+      return Array.from({ length: 12 }, (_, index) => {
+        const month = index + 1;
+        const key = `${now.getFullYear()}-${String(month).padStart(2, '0')}`;
+        return {
+          label: new Date(now.getFullYear(), index, 1).toLocaleDateString('es-GT', { month: 'short' }),
+          ingresos: this.incomes.filter((income) => income.income_date.startsWith(key)).reduce((sum, income) => sum + income.amount, 0),
+          gastos: this.expenses.filter((expense) => expense.expense_date.startsWith(key)).reduce((sum, expense) => sum + expense.amount, 0),
+        };
+      });
+    }
+    if (this.rangeMode === 'Semana') {
+      return Array.from({ length: 7 }, (_, index) => {
+        const date = new Date(now);
+        date.setDate(now.getDate() - (6 - index));
+        const key = date.toISOString().slice(0, 10);
+        return {
+          label: date.toLocaleDateString('es-GT', { weekday: 'short' }),
+          ingresos: this.incomes.filter((income) => income.income_date.startsWith(key)).reduce((sum, income) => sum + income.amount, 0),
+          gastos: this.expenses.filter((expense) => expense.expense_date.startsWith(key)).reduce((sum, expense) => sum + expense.amount, 0),
+        };
+      });
+    }
+    return Array.from({ length: 5 }, (_, index) => {
+      const start = index * 7 + 1;
+      const end = Math.min(start + 6, new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate());
+      const inRange = (date: string) => {
+        const parsed = new Date(date);
+        return parsed.getFullYear() === now.getFullYear() && parsed.getMonth() === now.getMonth() && parsed.getDate() >= start && parsed.getDate() <= end;
+      };
+      return {
+        label: `${start} ${now.toLocaleDateString('es-GT', { month: 'short' })}`,
+        ingresos: this.incomes.filter((income) => inRange(income.income_date)).reduce((sum, income) => sum + income.amount, 0),
+        gastos: this.expenses.filter((expense) => inRange(expense.expense_date)).reduce((sum, expense) => sum + expense.amount, 0),
+      };
+    });
   }
 
   get isFemale(): boolean {
     return this.currentUser?.gender === 'female';
+  }
+
+  onAvatarError(event: Event): void {
+    const image = event.target as HTMLImageElement;
+    if (image.src.endsWith(this.defaultAvatar)) return;
+    image.src = this.defaultAvatar;
   }
 
   getNotificationBadge(): string {
@@ -276,7 +386,7 @@ export class DashboardComponent implements OnInit {
 
   setRangeMode(mode: RangeMode): void {
     this.rangeMode = mode;
-    this.chartData = DATASETS[mode];
+    this.chartData = this.buildRealChartData();
     this.buildLineChart();
   }
 
@@ -360,9 +470,10 @@ export class DashboardComponent implements OnInit {
   private buildLineChart(): void {
     const w = this.chartWidth - this.padLeft - this.padRight;
     const h = this.chartHeight - this.padTop - this.padBottom;
-    const niceMax = 16000;
+    const maxValue = Math.max(...this.chartData.flatMap((point) => [point.ingresos, point.gastos]), 1);
+    const niceMax = Math.ceil(maxValue / 1000) * 1000 || 1000;
 
-    const stepX = w / (this.chartData.length - 1);
+    const stepX = this.chartData.length > 1 ? w / (this.chartData.length - 1) : 0;
     const scaleY = (v: number) => this.padTop + h - (v / niceMax) * h;
     const scaleX = (i: number) => this.padLeft + i * stepX;
 

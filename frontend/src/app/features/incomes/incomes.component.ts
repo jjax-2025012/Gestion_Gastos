@@ -2,20 +2,35 @@ import { Component, HostListener, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { NotificationService } from '../../core/services/notification.service';
 import { AuthService } from '../../core/services/auth.service';
 import {
   FinanceService,
   Income,
-  IncomeCategory,
-  CreateIncomeDTO,
+  Expense,
 } from '../../core/services/finance.service';
 
-interface SummaryMetric {
+/* ----------------------- Modelos de la vista ----------------------- */
+
+interface SummaryCard {
   title: string;
   amount: number;
-  icon: string;
-  colorClass: string;
-  sparklinePoints: string;
+  changePercent: number;
+  colorLine: 'blue' | 'green';
+  iconSrc: string;
+}
+
+interface ChartPoint {
+  label: string;
+  ingresos: number;
+  gastos: number;
+}
+
+interface ChartPointPosition {
+  x: number;
+  y: number;
+  value: number;
+  label: string;
 }
 
 interface DonutSlice {
@@ -27,43 +42,79 @@ interface DonutSlice {
   dashOffset: number;
 }
 
-interface MonthBar {
-  label: string;
+interface RecentIncome {
+  id: string;
+  description: string;
+  source: string;
+  date: string;
+  method: string;
+  status: string;
   amount: number;
-  heightPct: number;
 }
 
-interface IncomeForm {
-  category_id: string;
-  description: string;
-  amount: number | null;
-  income_date: string;
-  is_recurring: boolean;
-  notes: string;
+interface NotificationItem {
+  message: string;
+  time: string;
+  type: 'info' | 'success' | 'warning';
+  icon: string;
 }
+
+type RangeMode = 'Semana' | 'Mes' | 'Año';
+
+/* ----------------------- Datasets mock por rango ----------------------- */
+
+const DATASETS: Record<RangeMode, ChartPoint[]> = {
+  Semana: [
+    { label: 'Lun', ingresos: 0, gastos: 0 },
+    { label: 'Mar', ingresos: 0, gastos: 0 },
+    { label: 'Mié', ingresos: 0, gastos: 0 },
+    { label: 'Jue', ingresos: 0, gastos: 0 },
+    { label: 'Vie', ingresos: 0, gastos: 0 },
+    { label: 'Sáb', ingresos: 0, gastos: 0 },
+    { label: 'Dom', ingresos: 0, gastos: 0 },
+  ],
+  Mes: [
+    { label: '1 Ago', ingresos: 0, gastos: 0 },
+    { label: '8 Ago', ingresos: 0, gastos: 0 },
+    { label: '15 Ago', ingresos: 0, gastos: 0 },
+    { label: '22 Ago', ingresos: 0, gastos: 0 },
+    { label: '29 Ago', ingresos: 0, gastos: 0 },
+  ],
+  Año: [
+    { label: 'Ene', ingresos: 0, gastos: 0 },
+    { label: 'Feb', ingresos: 0, gastos: 0 },
+    { label: 'Mar', ingresos: 0, gastos: 0 },
+    { label: 'Abr', ingresos: 0, gastos: 0 },
+    { label: 'May', ingresos: 0, gastos: 0 },
+    { label: 'Jun', ingresos: 0, gastos: 0 },
+    { label: 'Jul', ingresos: 0, gastos: 0 },
+    { label: 'Ago', ingresos: 0, gastos: 0 },
+  ],
+};
+
+/* Fuentes de ingreso esperadas en la leyenda de la dona */
+const SOURCE_COLORS: Record<string, string> = {
+  Salarios: '#22c55e',
+  Ventas: '#2563eb',
+  Consultorías: '#10b981',
+  Rentas: '#8b5cf6',
+  Intereses: '#f59e0b',
+  Servicios: '#06b6d4',
+  Otros: '#9ca3af',
+};
 
 const ICON_PATHS: Record<string, string> = {
   bell: 'M6 9a6 6 0 0 1 12 0v5l2 3H4l2-3z M10 20a2 2 0 0 0 4 0',
   'log-out': 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9',
-  calendar: 'M3 5h18v16H3z M16 2v6 M8 2v6 M3 10h18',
-  wallet: 'M3 7a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M16.5 12h2.5 M3 9h18',
-  'trending-up': 'M3 17l6-6 4 4 8-8 M15 6h6v6',
-  dollar: 'M12 1v22 M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6',
-  repeat: 'M17 2l4 4-4 4 M21 6H9a4 4 0 0 0-4 4 M7 22l-4-4 4-4 M3 18h12a4 4 0 0 0 4-4',
-  plus: 'M12 5v14 M5 12h14',
-  close: 'M6 18 18 6 M6 6l12 12',
-  edit: 'M12 20h9 M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z',
-  trash:
-    'M3 6h18 M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2 M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6 M10 11v6 M14 11v6',
+  'chevron-up': 'M6 15l6-6 6 6',
+  'chevron-down': 'M6 9l6 6 6-6',
+  transfer: 'M17 2l4 4-4 4 M21 6H9a4 4 0 0 0-4 4 M7 22l-4-4 4-4 M3 18h12a4 4 0 0 0 4-4',
+  check: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M8 12.5l2.5 2.5L16 9.5',
+  alert: 'M12 3 2 20h20z M12 9.5v5 M12 17h.01',
+  info: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 8h.01 M11 11.5h1v5.5h1',
+    edit: 'M12 20h9 M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z',
+    trash: 'M3 6h18 M8 6V4h8v2 M19 6l-1 15H6L5 6 M10 11v6 M14 11v6',
 };
-
-const CATEGORY_ICONS: Record<string, string> = {
-  Salario: 'wallet',
-  Freelance: 'trending-up',
-  'Otros ingresos': 'plus',
-};
-
-const FALLBACK_COLOR = '#22c55e';
 
 @Component({
   selector: 'app-incomes',
@@ -76,17 +127,21 @@ export class IncomesComponent implements OnInit {
   private readonly authService = inject(AuthService);
   private readonly financeService = inject(FinanceService);
   private readonly router = inject(Router);
+  private readonly notificationService = inject(NotificationService);
 
   get currentUser() {
     return this.authService.currentUser();
   }
 
+  readonly ICON_PATHS = ICON_PATHS;
+
   /* ---------------- Layout ---------------- */
   sidebarCollapsed = false;
   isMobile = window.innerWidth < 900;
   userMenuOpen = false;
-  searchTerm = '';
-  activeRoute = 'ingresos';
+  readonly defaultAvatar = 'assets/user-avatar-hombre.png';
+  searchTerm: string = '';
+  filterCategoryId: string = '';
 
   menuItems = [
     { label: 'Dashboard', icon: 'home', route: 'dashboard' },
@@ -98,6 +153,7 @@ export class IncomesComponent implements OnInit {
     { label: 'Ahorro', icon: 'leaf', route: 'ahorro' },
     { label: 'Configuración', icon: 'settings', route: 'configuracion' },
   ];
+  activeRoute = 'ingresos';
 
   get currentDateLabel(): string {
     const currentDate = new Date();
@@ -106,207 +162,318 @@ export class IncomesComponent implements OnInit {
     return `${currentDate.getDate()} de ${capitalizedMonth} de ${currentDate.getFullYear()}`;
   }
 
+  onAvatarError(event: Event): void {
+    const image = event.target as HTMLImageElement;
+    if (image.src.endsWith(this.defaultAvatar)) return;
+    image.src = this.defaultAvatar;
+  }
+
   /* ---------------- Datos ---------------- */
   incomes: Income[] = [];
-  visibleIncomes: Income[] = [];
-  categories: IncomeCategory[] = [];
-  loading = false;
-  loadingError: string | null = null;
-  filterCategoryId = '';
-
-  summaryMetrics: SummaryMetric[] = [];
-  donutSlices: DonutSlice[] = [];
-  donutTotal = 0;
-  monthBars: MonthBar[] = [];
-
-  /* ---------------- Modal crear/editar ---------------- */
-  showModal = false;
-  isEditing = false;
-  editingId: string | null = null;
-  saving = false;
-  formError = '';
-  form: IncomeForm = {
+  expenses: Expense[] = [];
+  categories: any[] = [];
+  visibleIncomes: any[] = [];
+  summaryMetrics: any[] = [];
+  monthBars: any[] = [];
+  loading: boolean = false;
+  loadingError: string = '';
+  saving: boolean = false;
+  deleting: boolean = false;
+  toastMessage: string = '';
+  toastType: 'success' | 'error' = 'success';
+  showModal: boolean = false;
+  isEditing: boolean = false;
+  formError: string = '';
+  showDeleteModal: boolean = false;
+  deletingIncome: any = null;
+  form = {
     category_id: '',
+    amount: null as number | null,
     description: '',
-    amount: null,
-    income_date: this.todayISO(),
+    income_date: '',
     is_recurring: false,
     notes: '',
   };
 
-  /* ---------------- Modal eliminar ---------------- */
-  showDeleteModal = false;
-  deletingIncome: Income | null = null;
-  deleting = false;
+  /* ---------------- Tarjetas de resumen ---------------- */
+  summaryCards: SummaryCard[] = [
+    {
+      title: 'Balance total',
+      amount: 0,
+      changePercent: 0,
+      colorLine: 'blue',
+      iconSrc: 'assets/icon-balance.png',
+    },
+    {
+      title: 'Ingresos',
+      amount: 0,
+      changePercent: 0,
+      colorLine: 'green',
+      iconSrc: 'assets/ingresos-resumen.png',
+    },
+    {
+      title: 'Gastos',
+      amount: 0,
+      changePercent: 0,
+      colorLine: 'blue',
+      iconSrc: 'assets/gastos-resumen.png',
+    },
+    {
+      title: 'Ahorro',
+      amount: 0,
+      changePercent: 0,
+      colorLine: 'green',
+      iconSrc: 'assets/icon-ahorro-resumen.png',
+    },
+  ];
 
-  /* ---------------- Toast ---------------- */
-  toastMessage: string | null = null;
-  toastType: 'success' | 'error' = 'success';
-  private toastTimer?: number;
+  /* ---------------- Gráfica de líneas ---------------- */
+  rangeMode: RangeMode = 'Mes';
+  rangeOptions: RangeMode[] = ['Semana', 'Mes', 'Año'];
+  chartData: ChartPoint[] = DATASETS['Mes'];
+
+  readonly chartWidth = 540;
+  readonly chartHeight = 210;
+  readonly padLeft = 46;
+  readonly padRight = 16;
+  readonly padTop = 20;
+  readonly padBottom = 26;
+
+  ingresosPath = '';
+  yAxisTicks: { value: number; y: number }[] = [];
+  xAxisLabels: { label: string; x: number }[] = [];
+  incomePointPositions: ChartPointPosition[] = [];
+
+  /* ---------------- Dona de ingresos por fuente ---------------- */
+  donutSlices: DonutSlice[] = [];
+  donutTotal = 0;
+  private readonly donutRadius = 70;
+  private readonly donutCircumference = 2 * Math.PI * this.donutRadius;
+
+  /* ---------------- Tabla de ingresos recientes ---------------- */
+  recentIncomes: RecentIncome[] = [];
+
+  /* ---------------- Presupuesto ---------------- */
+  budgetTotal = 0;
+  budgetTarget = 10000;
+
+  /* ---------------- Notificaciones ---------------- */
+  notifications: NotificationItem[] = [];
 
   ngOnInit(): void {
-    this.loadCategories();
-    this.loadIncomes();
-  }
-
-  /* ================= Carga de datos ================= */
-
-  private loadCategories(): void {
+    this.loadData();
+    this.buildDefaultNotifs();
     this.financeService.getIncomeCategories('income').subscribe({
-      next: (cats) => {
-        this.categories = cats;
-        if (!this.form.category_id && cats.length > 0) {
-          this.form.category_id = cats[0].id;
-        }
-      },
-      error: () => {
-        this.categories = [];
-      },
+      next: (categories) => (this.categories = categories),
     });
   }
 
-  loadIncomes(): void {
-    this.loading = true;
-    this.loadingError = null;
+  private loadData(): void {
+    this.loadIncomes();
 
-    this.financeService.getIncomes().subscribe({
+    this.financeService.getExpenses().subscribe({
       next: (res) => {
-        this.incomes = res.data.map((inc) => ({
-          ...inc,
-          amount: Number(inc.amount) || 0,
-          category_color: inc.category_color || FALLBACK_COLOR,
-          category_name: inc.category_name || 'Sin categoría',
+        this.expenses = res.data.map((e) => ({
+          ...e,
+          amount: Number(e.amount) || 0,
         }));
-        this.applyFilters();
-        this.computeStats();
-        this.loading = false;
+        this.applyData();
       },
       error: () => {
-        this.incomes = [];
-        this.applyFilters();
-        this.loading = false;
-        this.loadingError = 'No se pudieron cargar los ingresos.';
+        this.expenses = [];
+        this.applyData();
       },
     });
   }
 
-  /* ================= Filtros ================= */
-
-  applyFilters(): void {
-    const term = this.searchTerm.trim().toLowerCase();
-
-    this.visibleIncomes = this.incomes.filter((inc) => {
-      const matchesCategory =
-        !this.filterCategoryId || inc.category_id === this.filterCategoryId;
-      const matchesTerm =
-        !term ||
-        inc.description.toLowerCase().includes(term) ||
-        (inc.notes ?? '').toLowerCase().includes(term) ||
-        inc.category_name.toLowerCase().includes(term);
-      return matchesCategory && matchesTerm;
-    });
-  }
-
-  /* ================= Estadísticas ================= */
-
-  private computeStats(): void {
-    const monthSums = this.getMonthSums();
-    const sparklinePoints = this.buildSparkline(monthSums.map((m) => m.amount));
-
-    const total = this.incomes.reduce((sum, inc) => sum + inc.amount, 0);
-
-    const now = new Date();
-    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const monthTotal = this.incomes
-      .filter((inc) => (inc.income_date ?? '').slice(0, 7) === currentMonthKey)
-      .reduce((sum, inc) => sum + inc.amount, 0);
-
-    const uniqueMonths = new Set(this.incomes.map((inc) => (inc.income_date ?? '').slice(0, 7)));
-    const avgMonthly = uniqueMonths.size > 0 ? total / uniqueMonths.size : 0;
-
-    const recurringTotal = this.incomes
-      .filter((inc) => inc.is_recurring)
-      .reduce((sum, inc) => sum + inc.amount, 0);
-
-    this.summaryMetrics = [
-      { title: 'Total de ingresos', amount: total, icon: 'wallet', colorClass: 'blue', sparklinePoints },
-      { title: 'Ingresos del mes', amount: monthTotal, icon: 'calendar', colorClass: 'green', sparklinePoints },
-      { title: 'Promedio mensual', amount: avgMonthly, icon: 'trending-up', colorClass: 'blue-light', sparklinePoints },
-      { title: 'Recurrentes', amount: recurringTotal, icon: 'repeat', colorClass: 'green-light', sparklinePoints },
-    ];
-
-    const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-    const maxMonth = Math.max(...monthSums.map((m) => m.amount), 1);
-    this.monthBars = monthSums.map((m) => {
-      const monthNumber = Number(m.key.slice(5, 7));
-      return {
-        label: months[monthNumber - 1],
-        amount: m.amount,
-        heightPct: m.amount > 0 ? Math.max(m.amount / maxMonth, 0.03) : 0,
-      };
-    });
-
+  private applyData(): void {
+    this.buildSummaryCards();
+    this.fillLineChartData();
+    this.buildLineChart();
     this.buildDonut();
+    this.buildRecentTable();
+    this.buildBudget();
   }
 
-  private getMonthSums(): { key: string; amount: number }[] {
-    const result: { key: string; amount: number }[] = [];
-    const now = new Date();
+  private monthKey(iso: string): string {
+    return (iso ?? '').slice(0, 7);
+  }
 
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const amount = this.incomes
-        .filter((inc) => (inc.income_date ?? '').slice(0, 7) === key)
-        .reduce((sum, inc) => sum + inc.amount, 0);
-      result.push({ key, amount });
+  private sumOf<T>(items: T[], pick: (t: T) => number): number {
+    return items.reduce((sum, it) => sum + (Number(pick(it)) || 0), 0);
+  }
+
+  /* ====================== Tarjetas de resumen ====================== */
+
+  private buildSummaryCards(): void {
+    const totalIncomes = this.sumOf(this.incomes, (i) => i.amount);
+    const totalExpenses = this.sumOf(this.expenses, (e) => e.amount);
+    const balance = totalIncomes - totalExpenses;
+    const savings = 0;
+
+    this.summaryCards[0].amount = balance;
+    this.summaryCards[1].amount = totalIncomes;
+    this.summaryCards[2].amount = totalExpenses;
+    this.summaryCards[3].amount = savings;
+    this.summaryCards[0].changePercent = this.percentChange(balance, this.previousMonthBalance());
+    this.summaryCards[1].changePercent = this.percentChange(
+      this.sumForMonth(this.incomes, 'income_date'),
+      this.sumForMonth(this.incomes, 'income_date', -1)
+    );
+    this.summaryCards[2].changePercent = this.percentChange(
+      this.sumForMonth(this.expenses, 'expense_date'),
+      this.sumForMonth(this.expenses, 'expense_date', -1)
+    );
+    this.summaryCards[3].changePercent = 0;
+  }
+
+  private percentChange(current: number, previous: number): number {
+    return previous === 0 ? 0 : ((current - previous) / previous) * 100;
+  }
+
+  private sumForMonth(items: any[], dateField: string, offset = 0): number {
+    const date = new Date();
+    date.setMonth(date.getMonth() + offset);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    return this.sumOf(items.filter((item) => this.monthKey(item[dateField]) === key), (item) => item.amount);
+  }
+
+  private previousMonthBalance(): number {
+    return this.sumForMonth(this.incomes, 'income_date', -1) - this.sumForMonth(this.expenses, 'expense_date', -1);
+  }
+
+  /* ====================== Gráfica de líneas ====================== */
+
+  private fillLineChartData(): void {
+    const mode = this.rangeMode;
+    const points = DATASETS[mode].map((p) => ({ ...p }));
+
+    if (mode === 'Año') {
+      points.forEach((p, idx) => {
+        const month = String(idx + 1).padStart(2, '0');
+        const key = new Date().getFullYear() + '-' + month;
+        p.ingresos = this.sumOf(
+          this.incomes.filter((i) => this.monthKey(i.income_date) === key),
+          (i) => i.amount
+        );
+        p.gastos = this.sumOf(
+          this.expenses.filter((e) => this.monthKey(e.expense_date) === key),
+          (e) => e.amount
+        );
+      });
+    } else if (mode === 'Mes') {
+      const now = new Date();
+      points.forEach((p, idx) => {
+        const start = idx * 7 + 1;
+        const end = idx === points.length - 1 ? 31 : start + 6;
+        p.label = `${start} ${now.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '')}`;
+        p.ingresos = this.sumByDayRange(this.incomes, 'income_date', start, end);
+        p.gastos = this.sumByDayRange(this.expenses, 'expense_date', start, end);
+      });
+    } else {
+      const now = new Date();
+      points.forEach((p, idx) => {
+        const date = new Date(now);
+        date.setDate(now.getDate() - (6 - idx));
+        p.label = date.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
+        p.ingresos = this.sumForDate(this.incomes, 'income_date', date);
+        p.gastos = this.sumForDate(this.expenses, 'expense_date', date);
+      });
     }
 
-    return result;
+    let cumulativeIncome = 0;
+    points.forEach((point) => {
+      cumulativeIncome += point.ingresos;
+      point.ingresos = cumulativeIncome;
+    });
+    this.chartData = points;
   }
 
-  private buildSparkline(values: number[]): string {
-    const w = 100;
-    const h = 30;
-    const max = Math.max(...values);
-    const min = Math.min(...values);
-    const range = max - min || 1;
-    const step = w / (values.length - 1);
-
-    return values
-      .map((v, i) => {
-        const x = i * step;
-        const y = h - ((v - min) / range) * (h - 4) - 2;
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
-      })
-      .join(' ');
+  private sumByDayRange(items: any[], dateField: string, start: number, end: number): number {
+    const now = new Date();
+    return this.sumOf(items.filter((item) => {
+      const date = new Date(item[dateField]);
+      return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() >= start && date.getDate() <= end;
+    }), (item) => item.amount);
   }
+
+  private sumForDate(items: any[], dateField: string, date: Date): number {
+    return this.sumOf(items.filter((item) => item[dateField]?.slice(0, 10) === date.toISOString().slice(0, 10)), (item) => item.amount);
+  }
+
+  setRangeMode(mode: RangeMode): void {
+    this.rangeMode = mode;
+    this.fillLineChartData();
+    this.buildLineChart();
+  }
+
+  private buildLineChart(): void {
+    const w = this.chartWidth - this.padLeft - this.padRight;
+    const h = this.chartHeight - this.padTop - this.padBottom;
+
+    const all = this.chartData.map((p) => p.ingresos);
+    const maxVal = Math.max(...all, 1);
+    const niceMax = this.ceilToNice(maxVal);
+
+    const stepX = this.chartData.length > 1 ? w / (this.chartData.length - 1) : 0;
+    const scaleY = (v: number) => this.padTop + h - (v / niceMax) * h;
+    const scaleX = (i: number) => this.padLeft + i * stepX;
+
+    const toPath = (key: 'ingresos') =>
+      this.chartData
+        .map((p, i) => `${i === 0 ? 'M' : 'L'} ${scaleX(i).toFixed(1)} ${scaleY(p[key]).toFixed(1)}`)
+        .join(' ');
+
+    this.ingresosPath = toPath('ingresos');
+
+    this.yAxisTicks = [0, niceMax / 2, niceMax].map((v) => ({
+      value: v,
+      y: scaleY(v),
+    }));
+
+    const labelStep = this.chartData.length > 6 ? Math.ceil(this.chartData.length / 5) : 1;
+    this.xAxisLabels = this.chartData
+      .map((p, i) => ({ label: p.label, x: scaleX(i) }))
+      .filter((_, i) => i % labelStep === 0 || i === this.chartData.length - 1);
+    this.incomePointPositions = this.chartData.map((point, index) => ({ x: scaleX(index), y: scaleY(point.ingresos), value: point.ingresos, label: point.label }));
+  }
+
+  private ceilToNice(value: number): number {
+    if (value <= 0) return 100;
+    const pow = Math.pow(10, Math.floor(Math.log10(value)));
+    const n = value / pow;
+    const nice = n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10;
+    return nice * pow;
+  }
+
+  formatYAxisValue(v: number): string {
+    if (v >= 1000) return `Q${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}k`;
+    return `Q${v}`;
+  }
+
+  /* ====================== Dona de ingresos ====================== */
 
   private buildDonut(): void {
-    const totals = new Map<string, { color: string; amount: number }>();
-
+    const totals = new Map<string, number>();
     for (const inc of this.incomes) {
-      const key = inc.category_name;
-      const current = totals.get(key) ?? { color: inc.category_color, amount: 0 };
-      totals.set(key, { color: current.color, amount: current.amount + inc.amount });
+      const name = this.normalizeSource(inc.category_name);
+      totals.set(name, (totals.get(name) ?? 0) + inc.amount);
     }
 
-    const entries = [...totals.entries()].filter(([, v]) => v.amount > 0);
-    this.donutTotal = entries.reduce((sum, [, v]) => sum + v.amount, 0);
+    const entries = [...totals.entries()];
+    this.donutTotal = entries.reduce((sum, [, v]) => sum + v, 0);
 
-    const radius = 70;
-    const circumference = 2 * Math.PI * radius;
     let cumulative = 0;
-
-    this.donutSlices = entries.map(([name, v]) => {
-      const percent = this.donutTotal > 0 ? Math.round((v.amount / this.donutTotal) * 100) : 0;
-      const dash = this.donutTotal > 0 ? (v.amount / this.donutTotal) * circumference : 0;
+    this.donutSlices = entries.map(([name, amount]) => {
+      const color = SOURCE_COLORS[name] ?? '#9ca3af';
+      const percent = this.donutTotal > 0 ? Math.round((amount / this.donutTotal) * 100) : 0;
+      const dash = this.donutTotal > 0 ? (amount / this.donutTotal) * this.donutCircumference : 0;
       const slice: DonutSlice = {
         name,
-        color: v.color,
-        amount: v.amount,
+        color,
+        amount,
         percent,
-        dashArray: `${dash} ${circumference - dash}`,
+        dashArray: `${dash} ${this.donutCircumference - dash}`,
         dashOffset: -cumulative,
       };
       cumulative += dash;
@@ -314,92 +481,107 @@ export class IncomesComponent implements OnInit {
     });
   }
 
-  /* ================= Acciones CRUD ================= */
-
-  openNewModal(): void {
-    this.isEditing = false;
-    this.editingId = null;
-    this.formError = '';
-    this.form = {
-      category_id: this.categories[0]?.id ?? '',
-      description: '',
-      amount: null,
-      income_date: this.todayISO(),
-      is_recurring: false,
-      notes: '',
+  private normalizeSource(name: string): string {
+    const map: Record<string, string> = {
+      Salario: 'Salarios',
+      'Ventas': 'Ventas',
+      'Consultoría': 'Consultorías',
+      'Consultorías': 'Consultorías',
+      Renta: 'Rentas',
+      Rentas: 'Rentas',
+      Intereses: 'Intereses',
+      Servicios: 'Servicios',
+      'Otros ingresos': 'Otros',
+      Otros: 'Otros',
     };
-    this.showModal = true;
+    return map[name] ?? name;
   }
 
-  openEditModal(income: Income): void {
-    this.isEditing = true;
-    this.editingId = income.id;
-    this.formError = '';
-    this.form = {
-      category_id: income.category_id,
-      description: income.description,
-      amount: income.amount,
-      income_date: (income.income_date ?? '').slice(0, 10),
-      is_recurring: income.is_recurring,
-      notes: income.notes ?? '',
-    };
-    this.showModal = true;
+  /* ====================== Tabla de ingresos recientes ====================== */
+
+  private buildRecentTable(): void {
+    const sorted = [...this.incomes].sort((a, b) =>
+      (b.income_date ?? '').localeCompare(a.income_date ?? '')
+    );
+    this.recentIncomes = sorted.slice(0, 6).map((inc) => ({
+      id: inc.id,
+      description: inc.description,
+      source: inc.category_name || 'Sin categoría',
+      date: this.formatDate(inc.income_date),
+      method: inc.is_recurring ? 'Automático' : 'Manual',
+      status: 'Completado',
+      amount: inc.amount,
+    }));
   }
 
-  closeModal(): void {
-    this.showModal = false;
-    this.formError = '';
+  /* ====================== Presupuesto ====================== */
+
+  private buildBudget(): void {
+    this.budgetTotal = this.sumOf(this.incomes, (i) => i.amount);
   }
 
-  submit(): void {
-    if (!this.form.category_id) {
-      this.formError = 'Selecciona una categoría.';
-      return;
-    }
-    if (!this.form.description.trim()) {
-      this.formError = 'La descripción es obligatoria.';
-      return;
-    }
-    if (this.form.amount === null || !Number.isFinite(this.form.amount) || this.form.amount <= 0) {
-      this.formError = 'El monto debe ser un número mayor que 0.';
-      return;
-    }
-    if (!this.form.income_date) {
-      this.formError = 'La fecha es obligatoria.';
-      return;
-    }
+  get budgetPercent(): number {
+    const pct = this.budgetTarget > 0 ? (this.budgetTotal / this.budgetTarget) * 100 : 0;
+    return Math.min(Math.round(pct), 100);
+  }
 
-    const dto: CreateIncomeDTO = {
-      category_id: this.form.category_id,
-      description: this.form.description.trim(),
-      amount: Math.round(this.form.amount * 100) / 100,
-      income_date: this.form.income_date,
-      is_recurring: this.form.is_recurring,
-      notes: this.form.notes ? this.form.notes.trim() : null,
-    };
+  private buildIncomeMetrics(): void {
+    const total = this.sumOf(this.incomes, (income) => income.amount);
+    const recurring = this.sumOf(this.incomes.filter((income) => income.is_recurring), (income) => income.amount);
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const monthTotal = this.sumOf(this.incomes.filter((income) => this.monthKey(income.income_date) === currentMonth), (income) => income.amount);
+    this.summaryMetrics = [];
+    const monthly = new Map<string, number>();
+    this.incomes.forEach((income) => {
+      const key = this.monthKey(income.income_date);
+      monthly.set(key, (monthly.get(key) ?? 0) + income.amount);
+    });
+    const months = [...monthly.keys()].sort().slice(-6);
+    const max = Math.max(...months.map((month) => monthly.get(month) ?? 0), 1);
+    this.monthBars = months.map((month) => ({
+      label: new Date(`${month}-01T00:00:00`).toLocaleDateString('es-ES', { month: 'short' }).replace('.', ''),
+      amount: monthly.get(month) ?? 0,
+      heightPct: (monthly.get(month) ?? 0) / max,
+    }));
+  }
 
-    this.saving = true;
-    this.formError = '';
-
-    const request$ = this.isEditing
-      ? this.financeService.updateIncome(this.editingId as string, dto)
-      : this.financeService.createIncome(dto);
-
-    request$.subscribe({
-      next: () => {
-        this.showToast(this.isEditing ? 'Ingreso actualizado correctamente.' : 'Ingreso agregado correctamente.');
-        this.closeModal();
-        this.loadIncomes();
-        this.saving = false;
-      },
-      error: (err) => {
-        this.formError = err.error?.message || 'No se pudo guardar el ingreso. Intenta de nuevo.';
-        this.saving = false;
-      },
+  applyFilters(): void {
+    const term = this.searchTerm.trim().toLowerCase();
+    this.visibleIncomes = this.incomes.filter((income) => {
+      const matchesCategory = !this.filterCategoryId || String(income.category_id) === String(this.filterCategoryId);
+      const searchable = `${income.description ?? ''} ${income.category_name ?? ''} ${income.notes ?? ''}`.toLowerCase();
+      return matchesCategory && (!term || searchable.includes(term));
     });
   }
 
-  openDeleteModal(income: Income): void {
+  getCategoryIcon(categoryName: string): string {
+    const normalized = (categoryName ?? '').toLowerCase();
+    if (normalized.includes('salari') || normalized.includes('nómin')) return 'M4 19h16M6 17V7h12v10M9 7V4h6v3';
+    if (normalized.includes('venta')) return 'M3 6h18l-2 13H5L3 6z M8 6a4 4 0 0 1 8 0';
+    if (normalized.includes('renta') || normalized.includes('alquiler')) return 'M3 21h18 M5 21V9l7-6 7 6v12 M9 21v-6h6v6';
+    if (normalized.includes('servicio') || normalized.includes('consult')) return 'M12 3v18 M3 12h18';
+    return 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0-9-18z M8 12h8';
+  }
+
+  openNewModal(): void {
+    this.form = { category_id: '', amount: null, description: '', income_date: new Date().toISOString().slice(0, 10), is_recurring: false, notes: '' };
+    this.formError = '';
+    this.isEditing = false;
+    this.deletingIncome = null;
+    this.showModal = true;
+  }
+
+  openEditModal(income: any): void {
+    this.form = { category_id: income.category_id ?? '', amount: Number(income.amount) || null, description: income.description ?? '', income_date: (income.income_date ?? '').slice(0, 10), is_recurring: Boolean(income.is_recurring), notes: income.notes ?? '' };
+    this.formError = '';
+    this.isEditing = true;
+    this.deletingIncome = income;
+    this.showModal = true;
+  }
+
+  closeModal(): void { this.showModal = false; }
+
+  openDeleteModal(income: any): void {
     this.deletingIncome = income;
     this.showDeleteModal = true;
   }
@@ -410,27 +592,79 @@ export class IncomesComponent implements OnInit {
   }
 
   confirmDelete(): void {
-    if (!this.deletingIncome) return;
-
+    if (!this.deletingIncome?.id) return;
     this.deleting = true;
     this.financeService.deleteIncome(this.deletingIncome.id).subscribe({
-      next: () => {
-        this.showToast('Ingreso eliminado correctamente.');
-        this.cancelDelete();
-        this.loadIncomes();
-        this.deleting = false;
-      },
-      error: (err) => {
-        this.showToast(err.error?.message || 'No se pudo eliminar el ingreso.', 'error');
-        this.deleting = false;
-      },
+      next: () => { this.deleting = false; this.cancelDelete(); this.showToast('Ingreso eliminado correctamente.', 'success'); this.notificationService.notifyDataChanged(); this.loadIncomes(); },
+      error: (error) => { console.error('Error al eliminar el ingreso:', error); this.deleting = false; this.showToast('No se pudo eliminar el ingreso.', 'error'); },
     });
   }
 
-  /* ================= Utilidades ================= */
+  submit(): void {
+    if (!this.form.category_id || !this.form.amount || this.form.amount <= 0 || !this.form.income_date) {
+      this.formError = 'Completa la categoría, el monto y la fecha.';
+      return;
+    }
+    this.saving = true;
+    this.formError = '';
+    const payload = { ...this.form, amount: Number(this.form.amount), notes: this.form.notes || null };
+    const request = this.isEditing && this.deletingIncome?.id ? this.financeService.updateIncome(this.deletingIncome.id, payload) : this.financeService.createIncome(payload);
+    request.subscribe({
+      next: () => { this.saving = false; this.closeModal(); this.showToast(this.isEditing ? 'Ingreso actualizado correctamente.' : 'Ingreso creado correctamente.', 'success'); this.notificationService.notifyDataChanged(); this.loadIncomes(); },
+      error: (error) => { console.error('Error al guardar el ingreso:', error); this.saving = false; this.formError = 'No se pudo guardar el ingreso.'; },
+    });
+  }
+
+  loadIncomes(): void {
+    this.loading = true;
+    this.loadingError = '';
+    this.financeService.getIncomes().subscribe({
+      next: (res) => {
+        this.incomes = res.data.map((income) => ({ ...income, amount: Number(income.amount) || 0 }));
+        this.buildIncomeMetrics();
+        this.applyFilters();
+        this.applyData();
+        this.loading = false;
+      },
+      error: () => { this.incomes = []; this.visibleIncomes = []; this.loadingError = 'No se pudieron cargar los ingresos.'; this.loading = false; },
+    });
+  }
+
+  private showToast(message: string, type: 'success' | 'error'): void {
+    this.toastMessage = message;
+    this.toastType = type;
+    window.setTimeout(() => (this.toastMessage = ''), 3500);
+  }
+
+  /* ====================== Notificaciones ====================== */
+
+  private buildDefaultNotifs(): void {
+    this.notifications = [
+      {
+        message: 'Recibida transferencia de Cliente A',
+        time: 'Hace 2 horas',
+        type: 'info',
+        icon: 'transfer',
+      },
+      {
+        message: 'Pago de nómina procesado correctamente',
+        time: 'Hace 5 horas',
+        type: 'success',
+        icon: 'check',
+      },
+      {
+        message: 'Nuevo ingreso registrado: Diseño web',
+        time: 'Ayer',
+        type: 'warning',
+        icon: 'alert',
+      },
+    ];
+  }
+
+  /* ====================== Utilidades ====================== */
 
   formatCurrency(value: number): string {
-    return 'Q' + value.toLocaleString('es-GT', {
+    return 'Q' + Number(value || 0).toLocaleString('es-GT', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
@@ -443,41 +677,20 @@ export class IncomesComponent implements OnInit {
     return `${d}/${m}/${y}`;
   }
 
-  private todayISO(): string {
-    const now = new Date();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${now.getFullYear()}-${month}-${day}`;
-  }
-
   getIconPath(name: string): string {
     return ICON_PATHS[name] ?? '';
   }
 
-  getCategoryIcon(name: string): string {
-    return ICON_PATHS[CATEGORY_ICONS[name] ?? 'wallet'] ?? '';
-  }
-
-  showToast(message: string, type: 'success' | 'error' = 'success'): void {
-    if (this.toastTimer) {
-      window.clearTimeout(this.toastTimer);
-    }
-    this.toastMessage = message;
-    this.toastType = type;
-    this.toastTimer = window.setTimeout(() => {
-      this.toastMessage = null;
-    }, 4500);
-  }
-
-  /* ================= Navegación / Layout ================= */
+  /* ====================== Navegación / Layout ====================== */
 
   navigateTo(item: { label: string; route: string }): void {
-    this.activeRoute = item.route;
-    if (item.route === 'dashboard') {
-      this.router.navigate(['/dashboard']);
+    if (item.route === 'ingresos') {
+      this.activeRoute = item.route;
       return;
     }
-    if (item.route !== 'ingresos') {
+    if (item.route === 'dashboard') {
+      this.activeRoute = item.route;
+      this.router.navigate(['/dashboard']);
       return;
     }
   }

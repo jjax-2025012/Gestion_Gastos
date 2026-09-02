@@ -17,9 +17,17 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     });
   }
 
+  const isAuthEndpoint =
+    req.url.includes('/auth/login') ||
+    req.url.includes('/auth/register') ||
+    req.url.includes('/auth/google');
+
   return next(authReq).pipe(
     catchError((error: HttpErrorResponse) => {
-      if (error.status === 401 || error.status === 403) {
+      const expiredOrInvalid =
+        error.status === 401 || error.status === 403;
+
+      if (expiredOrInvalid && !isAuthEndpoint && token) {
         authService.handleSessionExpiration();
       }
       return throwError(() => error);
