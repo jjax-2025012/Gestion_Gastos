@@ -6,6 +6,7 @@ import { expensesRouter } from "./modules/expenses/expenses.routes";
 import { incomesRouter } from "./modules/incomes/incomes.routes";
 import { categoriesRouter } from "./modules/categories/categories.routes";
 import { notificationsRouter } from "./modules/notifications/notifications.routes";
+import { dashboardRouter } from "./modules/dashboard/dashboard.routes";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 
 export const app = express();
@@ -29,6 +30,7 @@ app.use("/api/expenses", expensesRouter);
 app.use("/api/incomes", incomesRouter);
 app.use("/api/categories", categoriesRouter);
 app.use("/api/notifications", notificationsRouter);
+app.use("/api/dashboard", dashboardRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
