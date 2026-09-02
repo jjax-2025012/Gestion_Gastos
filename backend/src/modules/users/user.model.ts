@@ -5,6 +5,7 @@ export interface UserRecord {
   password: string; // hash de la contraseña
   gender: 'male' | 'female' | 'other';
   avatar_url?: string;
+  google_id?: string;
   firstName?: string;
   lastName?: string;
   created_at: Date;
@@ -21,6 +22,7 @@ export interface PublicUser {
   avatar_url?: string;
   avatar?: string;
   avatarUrl?: string;
+  google_id?: string;
 }
 
 export function toPublicUser(user: UserRecord): PublicUser {
