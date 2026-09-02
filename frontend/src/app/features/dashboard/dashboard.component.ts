@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
-import { FinanceService, Income, Expense } from '../../core/services/finance.service';
+import { DashboardMetrics, FinanceService, Income, Expense } from '../../core/services/finance.service';
 import { NotificationService } from '../../core/services/notification.service';
 
 /* ---------- Modelos ---------- */
@@ -54,10 +54,12 @@ interface BudgetItem {
 }
 
 interface NotificationItem {
+  id: string;
   message: string;
   time: string;
   type: 'success' | 'info' | 'warning';
   icon: string;
+  is_read: boolean;
 }
 
 type RangeMode = 'Semana' | 'Mes' | 'Año';
@@ -107,6 +109,10 @@ export class DashboardComponent implements OnInit {
 
   get currentUser() {
     return this.authService.currentUser();
+  }
+
+  get unreadNotificationCount(): number {
+    return this.notificationService.unreadCount();
   }
 
   constructor(private router: Router) {}
@@ -229,10 +235,12 @@ export class DashboardComponent implements OnInit {
     this.notificationService.getNotifications().subscribe({
       next: (items) => {
         this.notifications = items.map((item) => ({
+          id: item.id,
           message: item.message,
           time: new Date(item.created_at).toLocaleString('es-GT'),
           type: item.type,
           icon: item.icon,
+          is_read: item.is_read,
         }));
       },
       error: () => { this.notifications = []; },
@@ -240,6 +248,9 @@ export class DashboardComponent implements OnInit {
   }
 
   private loadDashboardData(): void {
+    this.financeService.getDashboardMetrics().subscribe({
+      next: (response) => this.applyMetricChanges(response.data),
+    });
     this.financeService.getIncomes().subscribe({
       next: (response) => {
         this.incomes = response.data.map((income) => ({ ...income, amount: Number(income.amount) || 0 }));
@@ -262,6 +273,14 @@ export class DashboardComponent implements OnInit {
         this.visibleExpenses = this.allExpenses;
         this.refreshDashboard();
       },
+    });
+  }
+
+  private applyMetricChanges(metrics: DashboardMetrics): void {
+    const values = [metrics.balance, metrics.incomes, metrics.expenses, metrics.savings];
+    values.forEach((metric, index) => {
+      this.summaryCards[index].amount = metric.currentMonth;
+      this.summaryCards[index].changePercent = metric.percentage;
     });
   }
 
@@ -337,7 +356,17 @@ export class DashboardComponent implements OnInit {
   }
 
   getNotificationBadge(): string {
-    return this.notifications.length > 99 ? '+99' : String(this.notifications.length);
+    const unreadCount = this.notificationService.unreadCount();
+    return unreadCount > 99 ? '+99' : String(unreadCount);
+  }
+
+  onBellClick(): void {
+    this.notificationService.markAllAsRead().subscribe({
+      next: () => {
+        this.notifications = this.notifications.map((notification) => ({ ...notification, is_read: true }));
+      },
+    });
+    document.getElementById('notificationsSection')?.scrollIntoView({ behavior: 'smooth' });
   }
 
   formatYAxisValue(value: number): string {
@@ -353,6 +382,17 @@ export class DashboardComponent implements OnInit {
       ? card.changePercent < 0
       : card.changePercent > 0;
     return isPositive ? 'up' : 'down';
+  }
+
+  getMetricChangeClass(card: SummaryCard): string {
+    if (card.changePercent === 0) return 'text-gray-400';
+    const favorable = card.title === 'Gastos' ? card.changePercent < 0 : card.changePercent > 0;
+    return favorable ? 'text-green-500' : 'text-red-500';
+  }
+
+  getMetricChangeArrow(card: SummaryCard): string {
+    if (card.changePercent === 0) return '';
+    return card.changePercent > 0 ? '↑' : '↓';
   }
 
   getChangeIcon(card: SummaryCard): string {
@@ -550,8 +590,21 @@ export class DashboardComponent implements OnInit {
       user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M4.5 20.5a7.5 7.5 0 0 1 15 0',
       'log-out': 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9',
       close: 'M6 18 18 6 M6 6l12 12',
+      trash: 'M3 6h18 M8 6V4h8v2 M19 6l-1 15H6L5 6 M10 11v6 M14 11v6',
     };
     return icons[name] ?? '';
+  }
+
+  deleteNotification(notification: NotificationItem, event: Event): void {
+    event.stopPropagation();
+    this.notificationService.deleteNotification(notification.id).subscribe({
+      next: () => {
+        this.notifications = this.notifications.filter((item) => item.id !== notification.id);
+        if (!notification.is_read) {
+          this.notificationService.unreadCount.update((count) => Math.max(0, count - 1));
+        }
+      },
+    });
   }
 
   getCategoryIcon(name: string): string {
