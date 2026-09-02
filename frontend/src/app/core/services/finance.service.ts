@@ -72,6 +72,19 @@ export interface DeleteIncomeResponse {
   message: string;
 }
 
+export interface DashboardMetric {
+  currentMonth: number;
+  previousMonth: number;
+  percentage: number;
+}
+
+export interface DashboardMetrics {
+  balance: DashboardMetric;
+  incomes: DashboardMetric;
+  expenses: DashboardMetric;
+  savings: DashboardMetric;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -79,6 +92,7 @@ export class FinanceService {
   private readonly EXPENSES_URL = `${environment.apiUrl}/expenses`;
   private readonly INCOMES_URL = `${environment.apiUrl}/incomes`;
   private readonly CATEGORIES_URL = `${environment.apiUrl}/categories`;
+  private readonly DASHBOARD_URL = `${environment.apiUrl}/dashboard`;
 
   constructor(private http: HttpClient) {}
 
@@ -87,6 +101,10 @@ export class FinanceService {
    */
   getExpenses(): Observable<ExpensesResponse> {
     return this.http.get<ExpensesResponse>(this.EXPENSES_URL);
+  }
+
+  getDashboardMetrics(): Observable<{ data: DashboardMetrics }> {
+    return this.http.get<{ data: DashboardMetrics }>(`${this.DASHBOARD_URL}/metrics`);
   }
 
   /**
