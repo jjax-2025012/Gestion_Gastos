@@ -78,9 +78,28 @@ export async function registerHandler(req: Request, res: Response, next: NextFun
   }
 }
 
+export async function googleLoginHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const body = (typeof req.body === 'object' && req.body !== null ? req.body : {}) as Record<string, unknown>;
+    const { idToken } = body;
+    if (typeof idToken !== 'string' || idToken.trim() === '') {
+      throw new ValidationError('El token de Google es obligatorio.');
+    }
+
+    const result = await authService.loginWithGoogle(idToken.trim());
+    res.status(200).json({
+      message: 'Inicio de sesión con Google exitoso.',
+      token: result.token,
+      user: result.user,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export function getMeHandler(req: Request, res: Response) {
-  const { sub, email, username, gender } = req.authUser;
+  const { sub, email, username, gender, picture, avatar_url, avatar, avatarUrl } = req.authUser;
   res.status(200).json({
-    user: { id: sub, email, username, gender },
+    user: { id: sub, email, username, gender, picture, avatar_url, avatar, avatarUrl },
   });
 }

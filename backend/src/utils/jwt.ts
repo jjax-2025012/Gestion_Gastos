@@ -7,6 +7,10 @@ export interface AuthTokenPayload {
   email: string;
   username: string;
   gender: "male" | "female" | "other";
+  picture?: string;
+  avatar_url?: string;
+  avatar?: string;
+  avatarUrl?: string;
 }
 
 /**
@@ -20,6 +24,10 @@ export function signAuthToken(user: PublicUser): string {
     email: user.email,
     username: user.username,
     gender: user.gender,
+    picture: user.picture,
+    avatar_url: user.avatar_url,
+    avatar: user.avatar,
+    avatarUrl: user.avatarUrl,
   };
 
   const options: SignOptions = {

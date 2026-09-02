@@ -36,3 +36,17 @@ export class UnauthorizedError extends AppError {
     super(401, message);
   }
 }
+
+/** 401 — el ID token emitido por Google no es válido o ya expiró. */
+export class GoogleAuthError extends AppError {
+  constructor(message = "El token de Google no es válido o ha expirado.") {
+    super(401, message);
+  }
+}
+
+/** 503 — Google OAuth no está configurado en el servidor. */
+export class GoogleNotConfiguredError extends AppError {
+  constructor(message = "El inicio de sesión con Google no está configurado en el servidor.") {
+    super(503, message);
+  }
+}

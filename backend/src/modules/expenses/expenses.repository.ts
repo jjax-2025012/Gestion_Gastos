@@ -1,4 +1,5 @@
 import { pool } from '../../db/pool';
+import { createNotification } from '../notifications/notifications.repository';
 
 export interface ExpenseRecord {
   id: string;
@@ -93,7 +94,9 @@ export async function createExpense(
   );
   // Obtener el gasto completo con la información de la categoría
   const expenseId = result.rows[0].id;
-  return getExpenseById(expenseId, userId) as Promise<ExpenseRecord>;
+  const expense = await getExpenseById(expenseId, userId) as ExpenseRecord;
+  await createNotification(userId, `Nuevo gasto registrado: ${expense.description}`, 'info', 'receipt');
+  return expense;
 }
 
 /**
@@ -149,7 +152,11 @@ export async function updateExpense(
   const query = `UPDATE expenses SET ${fields.join(', ')} WHERE id = $1 AND user_id = $2 RETURNING id`;
   await pool.query(query, values);
 
-  return getExpenseById(expenseId, userId);
+  const expense = await getExpenseById(expenseId, userId);
+  if (expense) {
+    await createNotification(userId, `Gasto modificado: Q${Number(expense.amount).toFixed(2)}`, 'info', 'edit');
+  }
+  return expense;
 }
 
 /**
@@ -160,5 +167,9 @@ export async function deleteExpense(expenseId: string, userId: string): Promise<
     'DELETE FROM expenses WHERE id = $1 AND user_id = $2',
     [expenseId, userId]
   );
-  return (result.rowCount ?? 0) > 0;
+  const deleted = (result.rowCount ?? 0) > 0;
+  if (deleted) {
+    await createNotification(userId, `Gasto eliminado: ${expenseId}`, 'warning', 'trash');
+  }
+  return deleted;
 }

@@ -4,6 +4,7 @@ export interface UserRecord {
   email: string;
   password: string; // hash de la contraseña
   gender: 'male' | 'female' | 'other';
+  avatar_url?: string;
   firstName?: string;
   lastName?: string;
   created_at: Date;
@@ -16,6 +17,10 @@ export interface PublicUser {
   gender: 'male' | 'female' | 'other';
   firstName?: string;
   lastName?: string;
+  picture?: string;
+  avatar_url?: string;
+  avatar?: string;
+  avatarUrl?: string;
 }
 
 export function toPublicUser(user: UserRecord): PublicUser {
@@ -26,5 +31,9 @@ export function toPublicUser(user: UserRecord): PublicUser {
     gender: user.gender,
     firstName: user.firstName,
     lastName: user.lastName,
+    avatar_url: user.avatar_url,
+    picture: user.avatar_url,
+    avatar: user.avatar_url,
+    avatarUrl: user.avatar_url,
   };
 }

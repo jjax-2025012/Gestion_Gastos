@@ -3,7 +3,7 @@ import { UserRecord } from './user.model';
 
 export async function findUserByEmail(email: string): Promise<UserRecord | null> {
   const result = await pool.query<UserRecord>(
-    `SELECT id, username, email, password_hash AS password, gender, created_at
+    `SELECT id, username, email, password_hash AS password, gender, avatar_url, created_at
      FROM users
      WHERE email = $1
      LIMIT 1`,
@@ -14,7 +14,7 @@ export async function findUserByEmail(email: string): Promise<UserRecord | null>
 
 export async function findUserByUsername(username: string): Promise<UserRecord | null> {
   const result = await pool.query<UserRecord>(
-    `SELECT id, username, email, password_hash AS password, gender, created_at
+    `SELECT id, username, email, password_hash AS password, gender, avatar_url, created_at
      FROM users
      WHERE username = $1
      LIMIT 1`,
@@ -25,7 +25,7 @@ export async function findUserByUsername(username: string): Promise<UserRecord |
 
 export async function findUserById(id: string): Promise<UserRecord | null> {
   const result = await pool.query<UserRecord>(
-    `SELECT id, username, email, password_hash AS password, gender, created_at
+    `SELECT id, username, email, password_hash AS password, gender, avatar_url, created_at
      FROM users
      WHERE id = $1
      LIMIT 1`,
@@ -38,13 +38,18 @@ export async function createUser(
   username: string,
   email: string,
   passwordHash: string,
-  gender: 'male' | 'female' | 'other'
+  gender: 'male' | 'female' | 'other',
+  avatarUrl?: string
 ): Promise<UserRecord> {
   const result = await pool.query<UserRecord>(
-    `INSERT INTO users (username, email, password_hash, gender)
-     VALUES ($1, $2, $3, $4)
-     RETURNING id, username, email, password_hash AS password, gender, created_at`,
-    [username, email, passwordHash, gender]
+    `INSERT INTO users (username, email, password_hash, gender, avatar_url)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING id, username, email, password_hash AS password, gender, avatar_url, created_at`,
+    [username, email, passwordHash, gender, avatarUrl ?? null]
   );
   return result.rows[0];
+}
+
+export async function updateUserAvatar(userId: string, avatarUrl: string): Promise<void> {
+  await pool.query('UPDATE users SET avatar_url = $1 WHERE id = $2', [avatarUrl, userId]);
 }

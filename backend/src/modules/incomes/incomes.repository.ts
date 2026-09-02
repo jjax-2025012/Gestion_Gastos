@@ -108,7 +108,7 @@ export async function updateIncome(
     amount: number;
     incomeDate: string;
     isRecurring: boolean;
-    notes: string;
+    notes: string | null;
   }>
 ): Promise<IncomeRecord | null> {
   const fields: string[] = [];

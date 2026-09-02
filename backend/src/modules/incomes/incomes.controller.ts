@@ -7,6 +7,7 @@ import {
 } from './incomes.repository';
 import { AppError, DatabaseUnavailableError, UnauthorizedError, ValidationError } from '../../utils/errors';
 import { AuthTokenPayload } from '../../utils/jwt';
+import { createNotification } from '../notifications/notifications.repository';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
@@ -178,7 +179,12 @@ export async function createIncomeHandler(
       data.isRecurring,
       notesBody
     );
-    res.status(201).json({ data: income });
+    try {
+      await createNotification(userId, `Nuevo ingreso registrado: ${income.description}`, 'success', 'trending-up');
+    } catch (notificationError) {
+      console.error('No se pudo registrar la notificación del ingreso creado.', notificationError);
+    }
+    res.status(201).json({ success: true, data: income });
   } catch (error) {
     forwardError(error, next);
   }
@@ -207,7 +213,13 @@ export async function updateIncomeHandler(
       return;
     }
 
-    res.status(200).json({ data: income });
+    try {
+      await createNotification(userId, `Ingreso modificado: Q${Number(income.amount).toFixed(2)}`, 'info', 'edit');
+    } catch (notificationError) {
+      console.error('No se pudo registrar la notificación del ingreso modificado.', notificationError);
+    }
+
+    res.status(200).json({ success: true, data: income });
   } catch (error) {
     forwardError(error, next);
   }
@@ -235,7 +247,13 @@ export async function deleteIncomeHandler(
       return;
     }
 
-    res.status(200).json({ message: 'Ingreso eliminado exitosamente.' });
+    try {
+      await createNotification(userId, `Ingreso eliminado: ${incomeId}`, 'warning', 'trash');
+    } catch (notificationError) {
+      console.error('No se pudo registrar la notificación del ingreso eliminado.', notificationError);
+    }
+
+    res.status(200).json({ success: true, message: 'Ingreso eliminado correctamente' });
   } catch (error) {
     forwardError(error, next);
   }

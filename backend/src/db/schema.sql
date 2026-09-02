@@ -18,8 +18,6 @@
 
 --    (Esto NO borra la tabla users, solo los datos de prueba)
 
-
-
 TRUNCATE TABLE reports, expenses, incomes RESTART IDENTITY CASCADE;
 
 
@@ -70,6 +68,8 @@ CREATE TABLE IF NOT EXISTS users (
 
     gender        VARCHAR(20) NOT NULL CHECK (gender IN ('male', 'female', 'other')),
 
+    avatar_url    TEXT,
+
 
 
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -77,6 +77,8 @@ CREATE TABLE IF NOT EXISTS users (
 
 
 );
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 
  
 
@@ -202,8 +204,6 @@ CREATE TABLE IF NOT EXISTS expenses (
 
 -- ----------------------------------------------------------------------------
 
-
-
 CREATE TABLE IF NOT EXISTS incomes (
 
 
@@ -257,6 +257,17 @@ CREATE TABLE IF NOT EXISTS incomes (
 
 
 -- 7) TABLA REPORTS
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    message VARCHAR(255) NOT NULL,
+    type VARCHAR(20) NOT NULL DEFAULT 'info' CHECK (type IN ('success', 'info', 'warning')),
+    icon VARCHAR(40) NOT NULL DEFAULT 'info',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DELETE FROM notifications;
 
 
 

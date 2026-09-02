@@ -31,6 +31,12 @@ export const env = {
 
     jwt: {
     secret: requireEnv("JWT_SECRET"),
-    expiresIn: process.env.JWT_EXPIRES_IN ?? "8h",
+    expiresIn: process.env.JWT_EXPIRATION ?? process.env.JWT_EXPIRES_IN ?? requireEnv("JWT_EXPIRES_IN"),
+  },
+
+  google: {
+    // Client ID de la aplicación OAuth creada en Google Cloud Console.
+    // Si está vacío, el endpoint /api/auth/google responderá con un error claro.
+    clientId: process.env.GOOGLE_CLIENT_ID ?? "",
   },
 };
