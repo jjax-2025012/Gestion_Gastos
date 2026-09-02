@@ -53,16 +53,19 @@
           <span>{{ currentDateLabel }}</span>
         </div>
 
-        <button class="header__bell">
+        <button class="header__bell" (click)="onBellClick()">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path [attr.d]="getIconPath('bell')" />
           </svg>
+          <span *ngIf="unreadNotificationCount > 0" class="header__bell-badge">
+            {{ unreadNotificationCount > 99 ? '+99' : unreadNotificationCount }}
+          </span>
         </button>
 
         <div class="header__user" (click)="toggleUserMenu()">
           <div class="header__avatar">
             <img
-              [src]="currentUser?.avatar || currentUser?.avatarUrl || currentUser?.picture || currentUser?.avatar_url || defaultAvatar"
+              [src]="currentUser?.avatar_url || currentUser?.avatar || currentUser?.avatarUrl || currentUser?.picture || defaultAvatar"
               (error)="onAvatarError($event)"
               class="user-avatar-img"
               [alt]="currentUser?.username || 'Usuario'"
@@ -272,15 +275,6 @@
         <div class="budget-meta"><span>{{ budgetPercent }}% del objetivo</span><span>{{ formatCurrency(budgetTarget) }}</span></div>
       </div>
 
-      <div class="panel notifications-panel">
-        <div class="panel__header"><h2>Notificaciones</h2><button class="link-btn" type="button">Ver todos</button></div>
-        <ul class="notifications-list">
-          <li *ngFor="let notification of notifications">
-            <span class="notification-icon"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path [attr.d]="getIconPath(notification.icon)" /></svg></span>
-            <span><strong>{{ notification.message }}</strong><small>{{ notification.time }}</small></span>
-          </li>
-        </ul>
-      </div>
     </section>
   </main>
 </div>
