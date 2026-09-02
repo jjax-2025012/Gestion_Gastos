@@ -52,13 +52,6 @@ interface RecentIncome {
   amount: number;
 }
 
-interface NotificationItem {
-  message: string;
-  time: string;
-  type: 'info' | 'success' | 'warning';
-  icon: string;
-}
-
 type RangeMode = 'Semana' | 'Mes' | 'Año';
 
 /* ----------------------- Datasets mock por rango ----------------------- */
@@ -103,6 +96,8 @@ const SOURCE_COLORS: Record<string, string> = {
   Otros: '#9ca3af',
 };
 
+const SOURCE_PALETTE = ['#10B981', '#3B82F6', '#8B5CF6', '#F59E0B', '#06B6D4', '#EF4444', '#9CA3AF'];
+
 const ICON_PATHS: Record<string, string> = {
   bell: 'M6 9a6 6 0 0 1 12 0v5l2 3H4l2-3z M10 20a2 2 0 0 0 4 0',
   'log-out': 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9',
@@ -131,6 +126,10 @@ export class IncomesComponent implements OnInit {
 
   get currentUser() {
     return this.authService.currentUser();
+  }
+
+  get unreadNotificationCount(): number {
+    return this.notificationService.unreadCount();
   }
 
   readonly ICON_PATHS = ICON_PATHS;
@@ -257,12 +256,8 @@ export class IncomesComponent implements OnInit {
   budgetTotal = 0;
   budgetTarget = 10000;
 
-  /* ---------------- Notificaciones ---------------- */
-  notifications: NotificationItem[] = [];
-
   ngOnInit(): void {
     this.loadData();
-    this.buildDefaultNotifs();
     this.financeService.getIncomeCategories('income').subscribe({
       next: (categories) => (this.categories = categories),
     });
@@ -464,8 +459,8 @@ export class IncomesComponent implements OnInit {
     this.donutTotal = entries.reduce((sum, [, v]) => sum + v, 0);
 
     let cumulative = 0;
-    this.donutSlices = entries.map(([name, amount]) => {
-      const color = SOURCE_COLORS[name] ?? '#9ca3af';
+    this.donutSlices = entries.map(([name, amount], index) => {
+      const color = SOURCE_COLORS[name] ?? SOURCE_PALETTE[index % SOURCE_PALETTE.length];
       const percent = this.donutTotal > 0 ? Math.round((amount / this.donutTotal) * 100) : 0;
       const dash = this.donutTotal > 0 ? (amount / this.donutTotal) * this.donutCircumference : 0;
       const slice: DonutSlice = {
@@ -638,27 +633,11 @@ export class IncomesComponent implements OnInit {
 
   /* ====================== Notificaciones ====================== */
 
-  private buildDefaultNotifs(): void {
-    this.notifications = [
-      {
-        message: 'Recibida transferencia de Cliente A',
-        time: 'Hace 2 horas',
-        type: 'info',
-        icon: 'transfer',
-      },
-      {
-        message: 'Pago de nómina procesado correctamente',
-        time: 'Hace 5 horas',
-        type: 'success',
-        icon: 'check',
-      },
-      {
-        message: 'Nuevo ingreso registrado: Diseño web',
-        time: 'Ayer',
-        type: 'warning',
-        icon: 'alert',
-      },
-    ];
+  onBellClick(): void {
+    this.notificationService.markAllAsRead().subscribe({
+      next: () => undefined,
+    });
+    this.router.navigate(['/dashboard'], { fragment: 'notificationsSection' });
   }
 
   /* ====================== Utilidades ====================== */
